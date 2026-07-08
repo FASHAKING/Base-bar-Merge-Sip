@@ -28,15 +28,20 @@ import {
 import { baseAccount } from '@wagmi/connectors';
 import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector';
 import { encodeFunctionData } from 'viem';
+import { base, baseSepolia } from '@wagmi/core/chains';
 import { TALLY_ADDRESS, TALLY_CHAIN, TALLY_RPC_URL, tallyAbi } from './config/tally.ts';
 import { isMiniApp } from './base.ts';
 import type { OnchainState } from './onchain.ts';
 
+// Both Base networks are configured so wallets on either can connect and be
+// switched; the tally contract itself lives on TALLY_CHAIN. The RPC override
+// (local testing) only applies to the active tally chain.
 const config = createConfig({
-  chains: [TALLY_CHAIN],
+  chains: [base, baseSepolia],
   connectors: [farcasterMiniApp(), injected(), baseAccount({ appName: 'Merge Sip' })],
   transports: {
-    [TALLY_CHAIN.id]: http(TALLY_RPC_URL),
+    [base.id]: http(TALLY_CHAIN.id === base.id ? TALLY_RPC_URL : undefined),
+    [baseSepolia.id]: http(TALLY_CHAIN.id === baseSepolia.id ? TALLY_RPC_URL : undefined),
   },
 });
 

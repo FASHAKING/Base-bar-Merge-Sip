@@ -41,10 +41,27 @@ The game has an optional onchain layer built with **wagmi + viem** following the
 - The wagmi/viem bundle is **lazy-loaded** (`src/onchain.ts` facade) so the game
   paints instantly and `sdk.actions.ready()` isn't delayed.
 
-The onchain UI stays completely hidden until you deploy the contract and
-configure its address. Two ways to deploy — you need Base Sepolia ETH from a
-[faucet](https://docs.base.org/base-chain/network-information/network-faucets)
-either way.
+### Networks: mainnet for production, testnet for testing
+
+The app is **mainnet-first**: it targets Base mainnet unless told otherwise.
+Network selection lives in `src/config/tally.ts` (first match wins):
+
+1. `localStorage.setItem('merge-sip-network', 'base-sepolia')` — flip a running
+   build to testnet from the browser console (no rebuild)
+2. `VITE_TALLY_NETWORK=base-sepolia npm run build` — a staging/testnet build
+3. default: `base` (mainnet)
+
+Deploy the contract to **both** networks and put each address in the
+`ADDRESSES` map in `src/config/tally.ts` — mainnet under `base` (what players
+use), testnet under `base-sepolia` (what you test against). The onchain UI
+stays completely hidden on any network whose address is still the zero
+address.
+
+### Deploying the contract
+
+Two ways to deploy. For Base Sepolia you need testnet ETH from a
+[faucet](https://docs.base.org/base-chain/network-information/network-faucets);
+for mainnet, real ETH on Base.
 
 **Option A — Foundry** (the [Deploy on Base](https://docs.base.org/get-started/deploy-on-base) flow):
 
@@ -67,10 +84,11 @@ cast call <CONTRACT_ADDRESS> "totalServed()(uint256)" --rpc-url $BASE_SEPOLIA_RP
 ```bash
 npm i -D solc
 node scripts/compile-contract.mjs
-PRIVATE_KEY=0x... node scripts/deploy.mjs --network base-sepolia
+PRIVATE_KEY=0x... node scripts/deploy.mjs --network base-sepolia   # testnet
+PRIVATE_KEY=0x... node scripts/deploy.mjs --network base           # mainnet
 ```
 
-Then paste the deployed address into `DEPLOYED_ADDRESS` in
+Then paste the deployed address(es) into the `ADDRESSES` map in
 `src/config/tally.ts` and rebuild. (For a quick test without editing code:
 `localStorage.setItem('merge-sip-tally-address', '0x...')` and reload.)
 
@@ -90,9 +108,9 @@ The E2E script drives the real game UI against the local chain: reads the
 tally, connects, saves a score (`serveScore`), waits for the receipt, and
 verifies the reads refresh.
 
-For **mainnet**: deploy the contract to Base, set `TALLY_CHAIN` to `base` in
-`src/config/tally.ts`, and update the address. The Base App in-app wallet lives
-on Base mainnet, so do this before publishing.
+The Base App in-app wallet lives on Base mainnet, which is why the default
+production network is `base` — make sure the mainnet address is set before
+publishing the mini app.
 
 ## Tech
 

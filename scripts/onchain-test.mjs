@@ -10,6 +10,7 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 
 await page.addInitScript(`
+  localStorage.setItem('merge-sip-network', 'base-sepolia');
   localStorage.setItem('merge-sip-tally-address', '0x2222222222222222222222222222222222222222');
   let connected = false;
   const listeners = {};

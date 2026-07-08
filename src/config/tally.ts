@@ -1,23 +1,49 @@
 // DrinkTally contract config.
-// Deploy contracts/src/DrinkTally.sol (see README) and paste the address here.
-// While the address is the zero address, all onchain UI stays hidden and the
+//
+// Production targets Base MAINNET. Deploy contracts/src/DrinkTally.sol (see
+// README) and paste the address into ADDRESSES.base. While the active
+// network's address is the zero address, all onchain UI stays hidden and the
 // game is fully playable offchain.
+//
+// Network selection (first match wins):
+//   1. localStorage 'merge-sip-network' = 'base' | 'base-sepolia'  (testing)
+//   2. build env    VITE_TALLY_NETWORK  = 'base' | 'base-sepolia'  (staging builds)
+//   3. default: 'base' (mainnet)
 
-import { baseSepolia } from '@wagmi/core/chains';
+import { base, baseSepolia } from '@wagmi/core/chains';
 
-const DEPLOYED_ADDRESS = '0x0000000000000000000000000000000000000000';
+const ADDRESSES = {
+  base: '0x0000000000000000000000000000000000000000',
+  'base-sepolia': '0x0000000000000000000000000000000000000000',
+} as const;
 
-// The chain the tally contract lives on. Switch to `base` for mainnet.
-export const TALLY_CHAIN = baseSepolia;
+type Network = keyof typeof ADDRESSES;
+
+function isNetwork(v: unknown): v is Network {
+  return v === 'base' || v === 'base-sepolia';
+}
+
+const ls = (key: string): string | null =>
+  typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+
+const lsNetwork = ls('merge-sip-network');
+const envNetwork = import.meta.env.VITE_TALLY_NETWORK as string | undefined;
+
+export const TALLY_NETWORK: Network = isNetwork(lsNetwork)
+  ? lsNetwork
+  : isNetwork(envNetwork)
+    ? envNetwork
+    : 'base';
+
+export const TALLY_CHAIN = TALLY_NETWORK === 'base' ? base : baseSepolia;
 
 // Local override for testing without editing code:
 //   localStorage.setItem('merge-sip-tally-address', '0x...')
-const override =
-  typeof localStorage !== 'undefined' ? localStorage.getItem('merge-sip-tally-address') : null;
+const addrOverride = ls('merge-sip-tally-address');
 
-export const TALLY_ADDRESS = ((override && /^0x[0-9a-fA-F]{40}$/.test(override)
-  ? override
-  : DEPLOYED_ADDRESS) as `0x${string}`);
+export const TALLY_ADDRESS = ((addrOverride && /^0x[0-9a-fA-F]{40}$/.test(addrOverride)
+  ? addrOverride
+  : ADDRESSES[TALLY_NETWORK]) as `0x${string}`);
 
 export const tallyEnabled =
   TALLY_ADDRESS !== '0x0000000000000000000000000000000000000000';
@@ -25,10 +51,10 @@ export const tallyEnabled =
 // Optional RPC override for local testing (e.g. a ganache/anvil node running
 // with --chain.chainId 84532):
 //   localStorage.setItem('merge-sip-rpc-url', 'http://127.0.0.1:8545')
-const rpcOverride =
-  typeof localStorage !== 'undefined' ? localStorage.getItem('merge-sip-rpc-url') : null;
+const rpcOverride = ls('merge-sip-rpc-url');
 
-export const TALLY_RPC_URL = rpcOverride && /^https?:\/\//.test(rpcOverride) ? rpcOverride : undefined;
+export const TALLY_RPC_URL =
+  rpcOverride && /^https?:\/\//.test(rpcOverride) ? rpcOverride : undefined;
 
 export const tallyAbi = [
   {

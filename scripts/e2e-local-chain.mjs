@@ -36,6 +36,7 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(String(e)));
 
 await page.addInitScript(`
+  localStorage.setItem('merge-sip-network', 'base-sepolia');
   localStorage.setItem('merge-sip-tally-address', '${TALLY}');
   localStorage.setItem('merge-sip-rpc-url', 'http://127.0.0.1:8545');
   let connected = false;
@@ -47,7 +48,11 @@ await page.addInitScript(`
       body: JSON.stringify({ jsonrpc: '2.0', id: id++, method, params: params ?? [] }),
     });
     const body = await res.json();
-    if (body.error) throw new Error(body.error.message);
+    if (body.error) {
+      const err = new Error(body.error.message);
+      err.code = body.error.code; // connectors switch on JSON-RPC error codes
+      throw err;
+    }
     return body.result;
   }
   window.ethereum = {
@@ -55,8 +60,18 @@ await page.addInitScript(`
       switch (method) {
         case 'eth_requestAccounts': connected = true; return ['${ACCOUNT}'];
         case 'eth_accounts': return connected ? ['${ACCOUNT}'] : [];
+        case 'wallet_requestPermissions': connected = true; return [{ parentCapability: 'eth_accounts' }];
         case 'wallet_getCapabilities': throw new Error('Method not supported');
         case 'wallet_switchEthereumChain': return null;
+        case 'eth_sendTransaction': {
+          // a real wallet estimates gas and fills fee fields itself; do the
+          // same (ganache's 90k default gas limit is too low for a first
+          // serveScore, and its tiny base fee rejects viem's default tip)
+          const est = await rpc('eth_estimateGas', [params[0]]);
+          const gas = '0x' + Math.ceil(parseInt(est, 16) * 1.2).toString(16);
+          const tx = { ...params[0], gas, maxFeePerGas: '0x77359400', maxPriorityFeePerGas: '0x1' };
+          return rpc(method, [tx]);
+        }
         default: return rpc(method, params); // forward to the local node
       }
     },
