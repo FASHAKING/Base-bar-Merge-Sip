@@ -20,6 +20,51 @@ bar back up past the dashed line!
 - If a drink comes to rest **below the dashed line**, the bar is backed up — game over.
 - Share your score straight to the feed with the **Share** button (opens the cast composer inside Base App).
 
+## Onchain: the Drink Tally
+
+The game has an optional onchain layer built with **wagmi + viem** following the
+[Build an app on Base](https://docs.base.org/get-started/build-app) guide:
+
+- **`contracts/src/DrinkTally.sol`** — a tiny contract on Base Sepolia: a global
+  `totalServed` tally plus per-player `bestScore` / `bestTier`.
+- **Wallet connection** — Base App in-app wallet (Farcaster mini app connector),
+  [Base Account](https://docs.base.org/base-account/overview/what-is-base-account),
+  and injected wallets (MetaMask), with auto-reconnect (`src/wallet.ts`).
+- **Reads** — the global tally is shown in the HUD, your onchain best on the
+  game-over screen (`readContract`, refreshed after each write).
+- **Writes** — "Serve Score Onchain" on the game-over screen records your run
+  (`serveScore(score, tier)`), with connect → switch-chain → sign → confirm
+  states surfaced on the button.
+- **EIP-5792** — wallet capabilities are detected per deployment chain
+  (`getCapabilities`); smart wallets submit via atomic `sendCalls`, EOAs fall
+  back to a plain `writeContract` transaction.
+- The wagmi/viem bundle is **lazy-loaded** (`src/onchain.ts` facade) so the game
+  paints instantly and `sdk.actions.ready()` isn't delayed.
+
+The onchain UI stays completely hidden until you deploy the contract and
+configure its address:
+
+```bash
+cd contracts
+curl -L https://foundry.paradigm.xyz | bash && foundryup   # install Foundry once
+cp .env.example .env && source .env
+cast wallet import deployer --interactive                  # never commit keys
+forge create ./src/DrinkTally.sol:DrinkTally \
+  --rpc-url $BASE_SEPOLIA_RPC_URL --account deployer
+
+# verify:
+cast call <CONTRACT_ADDRESS> "totalServed()(uint256)" --rpc-url $BASE_SEPOLIA_RPC_URL
+```
+
+You need Base Sepolia ETH from a [faucet](https://docs.base.org/base-chain/network-information/network-faucets)
+to deploy. Then paste the deployed address into `DEPLOYED_ADDRESS` in
+`src/config/tally.ts` and rebuild. (For a quick local test without editing code:
+`localStorage.setItem('merge-sip-tally-address', '0x...')` and reload.)
+
+For **mainnet**: deploy the contract to Base, set `TALLY_CHAIN` to `base` in
+`src/config/tally.ts`, and update the address. The Base App in-app wallet lives
+on Base mainnet, so do this before publishing.
+
 ## Tech
 
 - [Vite](https://vite.dev) + TypeScript, zero-framework
@@ -29,6 +74,10 @@ bar back up past the dashed line!
 - [`@farcaster/miniapp-sdk`](https://miniapps.farcaster.xyz) for Base App integration
   (`sdk.actions.ready()`, `composeCast` score sharing, haptics), with graceful
   fallbacks so the game also runs in any plain browser
+- `@wagmi/core` + `viem` for the onchain layer (no React — the game is plain
+  canvas, so the guide's hooks map to core actions: `useReadContract` →
+  `readContract`, `useSendCalls` → `sendCalls`, `useCapabilities` →
+  `getCapabilities`, and so on)
 
 ## Develop
 
@@ -74,3 +123,5 @@ npm run build   # outputs dist/
   `node scripts/gen-assets.mjs`).
 - `scripts/smoke-test.mjs` — headless gameplay smoke test (launch, merge,
   game over, restart) against the dev server.
+- `scripts/onchain-test.mjs` — headless test of the onchain flow using a mock
+  EIP-1193 provider (connect, capability detection, EOA write path).

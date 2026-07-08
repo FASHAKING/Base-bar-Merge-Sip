@@ -4,6 +4,7 @@
 import { DRINKS, MAX_TIER, drawDrink } from './drinks.ts';
 import { sfx } from './sfx.ts';
 import { haptic, shareScore } from './base.ts';
+import * as onchain from './onchain.ts';
 
 interface Body {
   id: number;
@@ -81,9 +82,11 @@ export class Game {
   private dragging = false;
   private trail: { t: number; x: number; y: number }[] = [];
 
-  // game-over buttons (hit areas)
+  // button hit areas
   private btnRestart: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private btnShare: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private btnServe: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private btnWallet: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   private time = 0;
 
@@ -159,6 +162,7 @@ export class Game {
     this.nextTier = this.spawnTier();
     this.aimX = this.inner.x + this.inner.w / 2;
     this.state = 'aim';
+    onchain.resetTx();
   }
 
   private spawnTier(): number {
@@ -180,10 +184,16 @@ export class Game {
 
   private onDown(e: PointerEvent): void {
     const p = this.pos(e);
+    if (onchain.state.enabled && hit(this.btnWallet, p)) {
+      void onchain.toggleWallet();
+      return;
+    }
     if (this.state === 'over') {
       if (hit(this.btnRestart, p)) this.reset();
       else if (hit(this.btnShare, p)) {
         void shareScore(this.score, DRINKS[this.maxTierMade].name);
+      } else if (onchain.state.enabled && hit(this.btnServe, p)) {
+        void onchain.serveScore(this.score, this.maxTierMade);
       }
       return;
     }
@@ -621,6 +631,42 @@ export class Game {
     ctx.textBaseline = 'middle';
     ctx.fillText(scoreTxt, pad + pillH * 1.1, topY + pillH / 2 + 1);
 
+    // wallet chip + global tally (only when a contract is configured)
+    if (onchain.state.enabled) {
+      const oc = onchain.state;
+      const wh = pillH * 0.76;
+      const wy = topY + pillH + 6;
+      const label = oc.address
+        ? `${oc.address.slice(0, 5)}…${oc.address.slice(-3)}`
+        : oc.status === 'connecting'
+          ? 'Connecting…'
+          : 'Connect';
+      ctx.font = `bold ${wh * 0.48}px 'Trebuchet MS', sans-serif`;
+      const ww = ctx.measureText(label).width + wh * 1.3;
+      this.btnWallet = { x: pad, y: wy, w: ww, h: wh };
+      roundRect(ctx, pad, wy, ww, wh, wh / 2);
+      ctx.fillStyle = oc.address ? 'rgba(46, 184, 114, 0.9)' : 'rgba(79, 109, 245, 0.9)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(pad + wh * 0.5, wy + wh / 2, wh * 0.18, 0, Math.PI * 2);
+      ctx.fillStyle = oc.address ? '#c8ffe3' : '#dbe2ff';
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, pad + wh * 0.9, wy + wh / 2 + 1);
+
+      if (oc.totalServed !== null) {
+        ctx.font = `${wh * 0.44}px 'Trebuchet MS', sans-serif`;
+        ctx.fillStyle = 'rgba(90, 52, 16, 0.85)';
+        ctx.fillText(
+          `Bar tally: ${oc.totalServed.toLocaleString()} served`,
+          pad,
+          wy + wh + wh * 0.42,
+        );
+      }
+    } else {
+      this.btnWallet = { x: 0, y: 0, w: 0, h: 0 };
+    }
+
     // NEXT preview (top-right)
     const nr = pillH * 0.9;
     const nx = this.W - pad - nr;
@@ -705,8 +751,9 @@ export class Game {
     ctx.fillStyle = 'rgba(30, 20, 10, 0.6)';
     ctx.fillRect(0, 0, this.W, this.H);
 
+    const onchainRows = onchain.state.enabled ? 1 : 0;
     const pw = Math.min(this.W * 0.84, 380);
-    const ph = Math.min(this.H * 0.46, 380);
+    const ph = Math.min(this.H * (0.46 + onchainRows * 0.1), 380 + onchainRows * 90);
     const px = this.W / 2 - pw / 2;
     const py = this.H / 2 - ph / 2;
     roundRect(ctx, px, py, pw, ph, 22);
@@ -733,12 +780,45 @@ export class Game {
     ctx.fillText(`Best: ${this.best.toLocaleString()}`, this.W / 2, py + ph * 0.68);
 
     const bw = pw * 0.38;
-    const bh = ph * 0.13;
-    const by = py + ph * 0.78;
+    const bh = Math.max(40, ph * (onchain.state.enabled ? 0.105 : 0.13));
+    const by = py + ph * (onchain.state.enabled ? 0.72 : 0.78);
     this.btnRestart = { x: this.W / 2 - bw - 8, y: by, w: bw, h: bh };
     this.btnShare = { x: this.W / 2 + 8, y: by, w: bw, h: bh };
     button(ctx, this.btnRestart, '#2eb872', 'Play Again');
     button(ctx, this.btnShare, '#4f6df5', 'Share 🍹');
+
+    if (onchain.state.enabled) {
+      const oc = onchain.state;
+      const sw = bw * 2 + 16;
+      const sy = by + bh + 10;
+      this.btnServe = { x: this.W / 2 - sw / 2, y: sy, w: sw, h: bh };
+      const labels: Record<string, [string, string]> = {
+        idle: ['Serve Score Onchain ⛓️', '#f2811d'],
+        connecting: ['Connecting Wallet…', '#8a6a3a'],
+        switching: ['Switching Network…', '#8a6a3a'],
+        signing: ['Confirm in Wallet…', '#8a6a3a'],
+        confirming: ['Saving Onchain…', '#8a6a3a'],
+        success: ['Saved Onchain ✓', '#2eb872'],
+        error: ['Retry — Serve Onchain', '#c0392b'],
+      };
+      const [label, color] = labels[oc.status];
+      button(ctx, this.btnServe, color, label);
+
+      ctx.font = `${pw * 0.042}px 'Trebuchet MS', sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = oc.status === 'error' ? '#c0392b' : '#8a6a3a';
+      const sub =
+        oc.status === 'error' && oc.error
+          ? oc.error
+          : oc.myBest !== null && oc.myBest > 0n
+            ? `Your onchain best: ${oc.myBest.toLocaleString()}`
+            : oc.address
+              ? 'Record this run on Base'
+              : 'Connects your wallet first';
+      ctx.fillText(sub, this.W / 2, sy + bh + pw * 0.06);
+    } else {
+      this.btnServe = { x: 0, y: 0, w: 0, h: 0 };
+    }
   }
 }
 

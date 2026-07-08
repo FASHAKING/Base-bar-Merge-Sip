@@ -1,5 +1,6 @@
 import { Game } from './game.ts';
 import { initMiniApp } from './base.ts';
+import { initOnchain } from './onchain.ts';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const game = new Game(canvas);
@@ -15,5 +16,6 @@ function loop(now: number): void {
 }
 requestAnimationFrame(loop);
 
-// Tell the Base App / Farcaster host we're ready (hides the splash screen).
-void initMiniApp();
+// Tell the Base App / Farcaster host we're ready (hides the splash screen),
+// then bring up the onchain layer (no-op until a contract is configured).
+void initMiniApp().then(() => initOnchain());
