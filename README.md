@@ -42,24 +42,53 @@ The game has an optional onchain layer built with **wagmi + viem** following the
   paints instantly and `sdk.actions.ready()` isn't delayed.
 
 The onchain UI stays completely hidden until you deploy the contract and
-configure its address:
+configure its address. Two ways to deploy — you need Base Sepolia ETH from a
+[faucet](https://docs.base.org/base-chain/network-information/network-faucets)
+either way.
+
+**Option A — Foundry** (the [Deploy on Base](https://docs.base.org/get-started/deploy-on-base) flow):
 
 ```bash
 cd contracts
 curl -L https://foundry.paradigm.xyz | bash && foundryup   # install Foundry once
 cp .env.example .env && source .env
 cast wallet import deployer --interactive                  # never commit keys
+
+# dry run first, then add --broadcast to actually deploy:
 forge create ./src/DrinkTally.sol:DrinkTally \
-  --rpc-url $BASE_SEPOLIA_RPC_URL --account deployer
+  --rpc-url $BASE_SEPOLIA_RPC_URL --account deployer --broadcast
 
 # verify:
 cast call <CONTRACT_ADDRESS> "totalServed()(uint256)" --rpc-url $BASE_SEPOLIA_RPC_URL
 ```
 
-You need Base Sepolia ETH from a [faucet](https://docs.base.org/base-chain/network-information/network-faucets)
-to deploy. Then paste the deployed address into `DEPLOYED_ADDRESS` in
-`src/config/tally.ts` and rebuild. (For a quick local test without editing code:
+**Option B — Node only** (no Foundry needed; uses solc + viem):
+
+```bash
+npm i -D solc
+node scripts/compile-contract.mjs
+PRIVATE_KEY=0x... node scripts/deploy.mjs --network base-sepolia
+```
+
+Then paste the deployed address into `DEPLOYED_ADDRESS` in
+`src/config/tally.ts` and rebuild. (For a quick test without editing code:
 `localStorage.setItem('merge-sip-tally-address', '0x...')` and reload.)
+
+**Local end-to-end loop** (no testnet ETH needed) — deploy to a local chain and
+play against it:
+
+```bash
+npm i -D solc ganache playwright
+npx ganache --chain.chainId 84532 --wallet.deterministic   # terminal 1
+node scripts/compile-contract.mjs                          # terminal 2
+PRIVATE_KEY=<a ganache key> node scripts/deploy.mjs --network local
+npm run dev                                                # terminal 3
+node scripts/e2e-local-chain.mjs <deployed-address>        # full flow test
+```
+
+The E2E script drives the real game UI against the local chain: reads the
+tally, connects, saves a score (`serveScore`), waits for the receipt, and
+verifies the reads refresh.
 
 For **mainnet**: deploy the contract to Base, set `TALLY_CHAIN` to `base` in
 `src/config/tally.ts`, and update the address. The Base App in-app wallet lives

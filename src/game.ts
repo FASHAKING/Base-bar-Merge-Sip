@@ -658,9 +658,9 @@ export class Game {
         ctx.font = `${wh * 0.44}px 'Trebuchet MS', sans-serif`;
         ctx.fillStyle = 'rgba(90, 52, 16, 0.85)';
         ctx.fillText(
-          `Bar tally: ${oc.totalServed.toLocaleString()} served`,
-          pad,
-          wy + wh + wh * 0.42,
+          `🍹 ${oc.totalServed.toLocaleString()} served`,
+          pad + ww + 8,
+          wy + wh / 2 + 1,
         );
       }
     } else {

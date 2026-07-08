@@ -28,7 +28,7 @@ import {
 import { baseAccount } from '@wagmi/connectors';
 import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector';
 import { encodeFunctionData } from 'viem';
-import { TALLY_ADDRESS, TALLY_CHAIN, tallyAbi } from './config/tally.ts';
+import { TALLY_ADDRESS, TALLY_CHAIN, TALLY_RPC_URL, tallyAbi } from './config/tally.ts';
 import { isMiniApp } from './base.ts';
 import type { OnchainState } from './onchain.ts';
 
@@ -36,7 +36,7 @@ const config = createConfig({
   chains: [TALLY_CHAIN],
   connectors: [farcasterMiniApp(), injected(), baseAccount({ appName: 'Merge Sip' })],
   transports: {
-    [TALLY_CHAIN.id]: http(),
+    [TALLY_CHAIN.id]: http(TALLY_RPC_URL),
   },
 });
 
@@ -68,8 +68,9 @@ async function refreshTally(state: OnchainState): Promise<void> {
       functionName: 'totalServed',
       chainId: TALLY_CHAIN.id,
     });
-  } catch {
+  } catch (e) {
     /* keep the last known value (may be null) — never break the game */
+    console.warn('[merge-sip] tally read failed:', e);
   }
 }
 

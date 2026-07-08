@@ -22,6 +22,14 @@ export const TALLY_ADDRESS = ((override && /^0x[0-9a-fA-F]{40}$/.test(override)
 export const tallyEnabled =
   TALLY_ADDRESS !== '0x0000000000000000000000000000000000000000';
 
+// Optional RPC override for local testing (e.g. a ganache/anvil node running
+// with --chain.chainId 84532):
+//   localStorage.setItem('merge-sip-rpc-url', 'http://127.0.0.1:8545')
+const rpcOverride =
+  typeof localStorage !== 'undefined' ? localStorage.getItem('merge-sip-rpc-url') : null;
+
+export const TALLY_RPC_URL = rpcOverride && /^https?:\/\//.test(rpcOverride) ? rpcOverride : undefined;
+
 export const tallyAbi = [
   {
     type: 'function',

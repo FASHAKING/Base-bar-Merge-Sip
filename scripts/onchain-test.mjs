@@ -40,9 +40,9 @@ const chip = await page.evaluate(() => window.__game.btnWallet);
 console.log('wallet chip rect:', chip);
 await page.mouse.click(chip.x + chip.w / 2, chip.y + chip.h / 2);
 await page.waitForTimeout(1500);
-const st1 = await page.evaluate(async () => {
-  const m = await import('/src/onchain.ts');
-  return { address: m.state.address, batching: m.state.supportsBatching };
+const st1 = await page.evaluate(() => {
+  const s = window.__onchain;
+  return { address: s.address, batching: s.supportsBatching };
 });
 console.log('after connect:', st1);
 
@@ -61,9 +61,9 @@ await page.screenshot({ path: `${shots}/onchain-2-over.png` });
 const serve = await page.evaluate(() => window.__game.btnServe);
 await page.mouse.click(serve.x + serve.w / 2, serve.y + serve.h / 2);
 await page.waitForTimeout(2500);
-const st2 = await page.evaluate(async () => {
-  const m = await import('/src/onchain.ts');
-  return { status: m.state.status, error: m.state.error };
+const st2 = await page.evaluate(() => {
+  const s = window.__onchain;
+  return { status: s.status, error: s.error };
 });
 console.log('after serve click:', st2); // expect confirming (fake tx never mines)
 await page.screenshot({ path: `${shots}/onchain-3-serving.png` });
