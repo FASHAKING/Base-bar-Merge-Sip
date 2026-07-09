@@ -101,12 +101,18 @@ contract DrinkTally is ERC721 {
         if (tier > bestTier[msg.sender]) {
             bestTier[msg.sender] = tier;
         }
+        // Award every unearned milestone badge from tier 5 up through `tier`
+        // — reaching tier 8 means the player mixed 5, 6, 7 and 8 in this run.
         if (tier >= 5) {
-            uint256 bit = 1 << tier;
-            if (badges[msg.sender] & bit == 0) {
-                badges[msg.sender] |= bit;
-                emit BadgeEarned(msg.sender, tier);
+            uint256 current = badges[msg.sender];
+            for (uint8 t = 5; t <= tier; t++) {
+                uint256 bit = 1 << t;
+                if (current & bit == 0) {
+                    current |= bit;
+                    emit BadgeEarned(msg.sender, t);
+                }
             }
+            badges[msg.sender] = current;
         }
         if (newBest) {
             _updateBoard(msg.sender);

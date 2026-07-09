@@ -248,11 +248,30 @@ async function sendWrite(
       calls: [{ to: TALLY_ADDRESS, data }],
     });
     setStatus(state, 'confirming');
-    await waitForCallsStatus(config, { id });
+    // waitForCallsStatus returns { status, receipts } — it does NOT throw on
+    // revert. Check the outcome and any receipt statuses ourselves so a
+    // reverted bundle doesn't silently pass as 'success'.
+    const result = await waitForCallsStatus(config, { id });
+    const bundleStatus = String(result?.status ?? '').toLowerCase();
+    const receipts: Array<{ status?: string | number }> = Array.isArray(result?.receipts)
+      ? result.receipts
+      : [];
+    const allSucceeded = receipts.every((r) => {
+      const s = String(r?.status ?? '').toLowerCase();
+      return s === 'success' || s === '0x1' || s === '1';
+    });
+    const bundleOk = bundleStatus === 'success' || bundleStatus === 'confirmed';
+    if (!bundleOk || (receipts.length > 0 && !allSucceeded)) {
+      throw new Error('Transaction reverted');
+    }
   } else {
     const hash = await write();
     setStatus(state, 'confirming');
-    await waitForTransactionReceipt(config, { hash, chainId: TALLY_CHAIN.id });
+    const receipt = await waitForTransactionReceipt(config, {
+      hash,
+      chainId: TALLY_CHAIN.id,
+    });
+    if (receipt.status !== 'success') throw new Error('Transaction reverted');
   }
   setStatus(state, 'success');
 }

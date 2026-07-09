@@ -468,12 +468,28 @@ export class Game {
     sfx.gameOver();
     haptic('heavy');
 
-    // auto-serve: a connected player's new onchain best is saved without
-    // needing a button press (the wallet still asks for the signature)
+    // auto-serve: a connected player's run is saved without a button press
+    // (the wallet still asks for the signature) whenever the run beats their
+    // onchain best OR unlocks a new milestone badge
     const oc = onchain.state;
-    if (oc.enabled && oc.address && this.score > 0 && this.score > Number(oc.myBest ?? 0n)) {
+    if (oc.enabled && oc.address && this.score > 0 && this.runWorthSaving()) {
       onchain.serveScore(this.score, this.maxTierMade);
     }
+  }
+
+  /**
+   * A run is worth serving onchain if it beats the player's onchain best
+   * score OR contains a first-time milestone (tier 5+ never mixed before).
+   */
+  private runWorthSaving(): boolean {
+    const oc = onchain.state;
+    if (this.score > Number(oc.myBest ?? 0n)) return true;
+    if (this.maxTierMade >= 5 && oc.badges !== null) {
+      for (let t = 5; t <= this.maxTierMade; t++) {
+        if (((oc.badges >> BigInt(t)) & 1n) === 0n) return true;
+      }
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------- render
@@ -871,12 +887,16 @@ export class Game {
             serveTappable = true;
             serveColor = '#c0392b';
             break;
-          default:
-            serveText =
-              this.score > Number(oc.myBest ?? 0n)
+          default: {
+            const worth = this.runWorthSaving();
+            const beatsScore = this.score > Number(oc.myBest ?? 0n);
+            serveText = worth
+              ? beatsScore
                 ? '⛓ Tap to save this score onchain'
-                : `Onchain best: ${(oc.myBest ?? 0n).toLocaleString()} — not beaten this run`;
-            serveTappable = this.score > Number(oc.myBest ?? 0n);
+                : '⛓ Tap to save your new milestone onchain'
+              : `Onchain best: ${(oc.myBest ?? 0n).toLocaleString()} — not beaten this run`;
+            serveTappable = worth;
+          }
         }
       }
       ctx.font = `${serveTappable ? 'bold ' : ''}${pw * 0.042}px 'Trebuchet MS', sans-serif`;
