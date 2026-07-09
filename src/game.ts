@@ -46,7 +46,7 @@ interface Rect {
 
 type State = 'aim' | 'settle' | 'over';
 
-const SPAWN_WEIGHTS = [30, 26, 20, 14, 10]; // tiers 0..4
+const SPAWN_WEIGHTS = [28, 24, 18, 13, 9]; // tiers 0..4, always available
 const BEST_KEY = 'merge-sip-best';
 
 export class Game {
@@ -165,10 +165,18 @@ export class Game {
   }
 
   private spawnTier(): number {
-    const total = SPAWN_WEIGHTS.reduce((a, b) => a + b, 0);
+    // The dealer gets meaner as you progress: once you've mixed high tiers,
+    // big drinks start showing up in your hand — they crowd the board and
+    // force awkward gaps.
+    const weights = [...SPAWN_WEIGHTS];
+    if (this.maxTierMade >= 5) weights.push(8); // tier 5 (Blueberry Breeze)
+    if (this.maxTierMade >= 6) weights.push(6); // tier 6 (Mojito Royale)
+    if (this.maxTierMade >= 8) weights.push(4); // tier 7 (Berry Colada)
+
+    const total = weights.reduce((a, b) => a + b, 0);
     let roll = Math.random() * total;
-    for (let i = 0; i < SPAWN_WEIGHTS.length; i++) {
-      roll -= SPAWN_WEIGHTS[i];
+    for (let i = 0; i < weights.length; i++) {
+      roll -= weights[i];
       if (roll <= 0) return i;
     }
     return 0;
