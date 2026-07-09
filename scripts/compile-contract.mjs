@@ -20,7 +20,19 @@ const input = {
   },
 };
 
-const output = JSON.parse(solc.compile(JSON.stringify(input)));
+// resolve @openzeppelin/... imports from node_modules
+function findImports(importPath) {
+  try {
+    const p = importPath.startsWith('@')
+      ? path.join(root, 'node_modules', importPath)
+      : path.join(root, 'contracts/src', importPath);
+    return { contents: fs.readFileSync(p, 'utf8') };
+  } catch {
+    return { error: `import not found: ${importPath}` };
+  }
+}
+
+const output = JSON.parse(solc.compile(JSON.stringify(input), { import: findImports }));
 const fatal = (output.errors ?? []).filter((e) => e.severity === 'error');
 for (const e of output.errors ?? []) console.error(e.formattedMessage);
 if (fatal.length) process.exit(1);

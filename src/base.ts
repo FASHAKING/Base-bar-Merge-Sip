@@ -33,7 +33,20 @@ export function haptic(style: 'light' | 'medium' | 'heavy' = 'light'): void {
   }
 }
 
-/** Open the cast composer prefilled with the player's score. */
+/** Open an external URL (in-app browser inside Base App, new tab elsewhere). */
+export function openExternal(url: string): void {
+  if (inMiniApp) {
+    try {
+      void sdk.actions.openUrl(url);
+      return;
+    } catch {
+      /* fall through */
+    }
+  }
+  window.open(url, '_blank', 'noopener');
+}
+
+/** Open the cast composer prefilled with the player's score (recast). */
 export async function shareScore(score: number, bestTierName: string): Promise<void> {
   const text = `I mixed my way to a ${bestTierName} and scored ${score.toLocaleString()} in Merge Sip 🍹 Can you out-pour me?`;
   if (inMiniApp) {

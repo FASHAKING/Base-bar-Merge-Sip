@@ -2,6 +2,9 @@
 // onchain leaderboard. The game itself stays pure canvas; these are menus.
 
 import * as onchain from './onchain.ts';
+import { drawDrink } from './drinks.ts';
+
+const BADGE_TIERS = [5, 6, 7, 8, 9];
 
 interface UiOptions {
   getBest: () => number;
@@ -28,6 +31,18 @@ export function initUi(options: UiOptions): void {
   $('name-input').addEventListener('keydown', (e) => {
     if ((e as KeyboardEvent).key === 'Enter') claim();
   });
+
+  // milestone badge icons (drawn once with the game's own art)
+  const icons = $('badge-icons');
+  for (const tier of BADGE_TIERS) {
+    const c = document.createElement('canvas');
+    c.width = 88;
+    c.height = 88;
+    c.dataset.tier = String(tier);
+    c.title = `First ${tier + 1}-tier mix`;
+    drawDrink(c.getContext('2d')!, tier, 44, 46, 30);
+    icons.appendChild(c);
+  }
 
   render();
   setInterval(render, 400);
@@ -73,6 +88,17 @@ function render(): void {
     nameStatus.textContent = 'Connect to claim a username & join the leaderboard';
     nameStatus.classList.remove('error');
     return;
+  }
+
+  // badges: shown once connected, lit when earned
+  const badgeRow = $('badge-row');
+  badgeRow.hidden = !s.address || s.badges === null;
+  if (!badgeRow.hidden) {
+    for (const c of $('badge-icons').querySelectorAll('canvas')) {
+      const tier = BigInt(c.dataset.tier ?? 0);
+      const earned = ((s.badges! >> tier) & 1n) === 1n;
+      c.classList.toggle('locked', !earned);
+    }
   }
 
   if (s.username && s.nameStatus !== 'error') {

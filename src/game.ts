@@ -6,6 +6,7 @@ import { sfx } from './sfx.ts';
 import { haptic, shareScore } from './base.ts';
 import * as onchain from './onchain.ts';
 import { showLeaderboard } from './ui.ts';
+import { shareToX } from './share.ts';
 
 interface Body {
   id: number;
@@ -88,6 +89,8 @@ export class Game {
   private btnServe: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private btnWallet: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private btnBoard: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private btnShareX: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private btnMint: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   /** Personal best (this device), shown as the milestone to beat. */
   get bestScore(): number {
@@ -206,8 +209,12 @@ export class Game {
       if (hit(this.btnRestart, p)) this.reset();
       else if (hit(this.btnShare, p)) {
         void shareScore(this.score, DRINKS[this.maxTierMade].name);
+      } else if (hit(this.btnShareX, p)) {
+        void shareToX(this.score, this.maxTierMade, onchain.state.username);
+      } else if (onchain.state.enabled && hit(this.btnMint, p)) {
+        onchain.mintScoreCard();
       } else if (onchain.state.enabled && hit(this.btnServe, p)) {
-        void onchain.serveScore(this.score, this.maxTierMade);
+        onchain.serveScore(this.score, this.maxTierMade);
       } else if (onchain.state.enabled && hit(this.btnBoard, p)) {
         showLeaderboard();
       }
@@ -460,6 +467,13 @@ export class Game {
     safeSet(BEST_KEY, String(this.best));
     sfx.gameOver();
     haptic('heavy');
+
+    // auto-serve: a connected player's new onchain best is saved without
+    // needing a button press (the wallet still asks for the signature)
+    const oc = onchain.state;
+    if (oc.enabled && oc.address && this.score > 0 && this.score > Number(oc.myBest ?? 0n)) {
+      onchain.serveScore(this.score, this.maxTierMade);
+    }
   }
 
   // ---------------------------------------------------------------- render
@@ -767,8 +781,8 @@ export class Game {
     ctx.fillRect(0, 0, this.W, this.H);
 
     const onchainRows = onchain.state.enabled ? 1 : 0;
-    const pw = Math.min(this.W * 0.84, 380);
-    const ph = Math.min(this.H * (0.46 + onchainRows * 0.1), 380 + onchainRows * 90);
+    const pw = Math.min(this.W * 0.86, 390);
+    const ph = Math.min(this.H * (0.52 + onchainRows * 0.12), 420 + onchainRows * 110);
     const px = this.W / 2 - pw / 2;
     const py = this.H / 2 - ph / 2;
     roundRect(ctx, px, py, pw, ph, 22);
@@ -778,69 +792,118 @@ export class Game {
     ctx.strokeStyle = '#c07d3e';
     ctx.stroke();
 
+    const oc = onchain.state;
+    // upper section compresses when the onchain rows are present
+    const f = oc.enabled
+      ? { title: 0.1, drink: 0.22, drinkR: 0.085, bestDrink: 0.33, score: 0.42, best: 0.48, rows: 0.54 }
+      : { title: 0.13, drink: 0.29, drinkR: 0.1, bestDrink: 0.44, score: 0.54, best: 0.61, rows: 0.68 };
+
     ctx.textAlign = 'center';
     ctx.fillStyle = '#c0392b';
     ctx.font = `bold ${pw * 0.09}px 'Trebuchet MS', sans-serif`;
-    ctx.fillText('Bar is backed up!', this.W / 2, py + ph * 0.15);
+    ctx.fillText('Bar is backed up!', this.W / 2, py + ph * f.title);
 
-    drawDrink(ctx, this.maxTierMade, this.W / 2, py + ph * 0.34, pw * 0.1);
+    drawDrink(ctx, this.maxTierMade, this.W / 2, py + ph * f.drink, pw * f.drinkR);
 
     ctx.fillStyle = '#5a3410';
     ctx.font = `${pw * 0.055}px 'Trebuchet MS', sans-serif`;
-    ctx.fillText(`Best drink: ${DRINKS[this.maxTierMade].name}`, this.W / 2, py + ph * 0.5);
+    ctx.fillText(`Best drink: ${DRINKS[this.maxTierMade].name}`, this.W / 2, py + ph * f.bestDrink);
     ctx.font = `bold ${pw * 0.085}px 'Trebuchet MS', sans-serif`;
-    ctx.fillText(`Score: ${this.score.toLocaleString()}`, this.W / 2, py + ph * 0.6);
+    ctx.fillText(`Score: ${this.score.toLocaleString()}`, this.W / 2, py + ph * f.score);
     ctx.font = `${pw * 0.05}px 'Trebuchet MS', sans-serif`;
     ctx.fillStyle = '#8a6a3a';
-    ctx.fillText(`Best: ${this.best.toLocaleString()}`, this.W / 2, py + ph * 0.68);
+    ctx.fillText(`Best: ${this.best.toLocaleString()}`, this.W / 2, py + ph * f.best);
 
-    const bw = pw * 0.38;
-    const bh = Math.max(40, ph * (onchain.state.enabled ? 0.105 : 0.13));
-    const by = py + ph * (onchain.state.enabled ? 0.72 : 0.78);
-    this.btnRestart = { x: this.W / 2 - bw - 8, y: by, w: bw, h: bh };
-    this.btnShare = { x: this.W / 2 + 8, y: by, w: bw, h: bh };
+    const bw = pw * 0.42;
+    const bh = Math.max(40, ph * (oc.enabled ? 0.082 : 0.1));
+    const rowGap = 10;
+    let by = py + ph * f.rows;
+
+    // row 1: play again + recast (Farcaster)
+    this.btnRestart = { x: this.W / 2 - bw - 6, y: by, w: bw, h: bh };
+    this.btnShare = { x: this.W / 2 + 6, y: by, w: bw, h: bh };
     button(ctx, this.btnRestart, '#2eb872', 'Play Again');
-    button(ctx, this.btnShare, '#4f6df5', 'Share 🍹');
+    button(ctx, this.btnShare, '#7c65c1', 'Recast 💜');
+    by += bh + rowGap;
 
-    if (onchain.state.enabled) {
-      const oc = onchain.state;
-      const sw = bw * 2 + 16;
-      const sy = by + bh + 10;
-      this.btnServe = { x: this.W / 2 - sw / 2, y: sy, w: sw, h: bh };
-      const labels: Record<string, [string, string]> = {
-        idle: ['Serve Score Onchain ⛓️', '#f2811d'],
-        connecting: ['Connecting Wallet…', '#8a6a3a'],
-        switching: ['Switching Network…', '#8a6a3a'],
-        signing: ['Confirm in Wallet…', '#8a6a3a'],
-        confirming: ['Saving Onchain…', '#8a6a3a'],
-        success: ['Saved Onchain ✓', '#2eb872'],
-        error: ['Retry — Serve Onchain', '#c0392b'],
+    // row 2: share to X (+ mint when onchain is live)
+    if (oc.enabled) {
+      this.btnShareX = { x: this.W / 2 - bw - 6, y: by, w: bw, h: bh };
+      this.btnMint = { x: this.W / 2 + 6, y: by, w: bw, h: bh };
+      button(ctx, this.btnShareX, '#1d2229', 'Share on 𝕏');
+      const mintLabels: Record<string, [string, string]> = {
+        idle: ['Mint Card 🎴', '#f2811d'],
+        connecting: ['Confirm…', '#8a6a3a'],
+        switching: ['Switching…', '#8a6a3a'],
+        signing: ['Confirm…', '#8a6a3a'],
+        confirming: ['Minting…', '#8a6a3a'],
+        success: ['Minted ✓', '#2eb872'],
+        error: ['Retry Mint', '#c0392b'],
       };
-      const [label, color] = labels[oc.status];
-      button(ctx, this.btnServe, color, label);
+      const [mLabel, mColor] = mintLabels[oc.mintStatus];
+      button(ctx, this.btnMint, mColor, mLabel);
+      by += bh + rowGap;
 
-      ctx.font = `${pw * 0.042}px 'Trebuchet MS', sans-serif`;
+      // onchain save status (auto-saves new bests; tappable when action needed)
+      let serveText: string;
+      let serveTappable = false;
+      let serveColor = '#8a6a3a';
+      if (!oc.address) {
+        serveText = '⛓ Tap to connect & save this score onchain';
+        serveTappable = true;
+        serveColor = '#f2811d';
+      } else {
+        switch (oc.status) {
+          case 'connecting':
+          case 'switching':
+          case 'signing':
+            serveText = 'Confirm in wallet to save your new best…';
+            break;
+          case 'confirming':
+            serveText = 'Saving your new best onchain…';
+            break;
+          case 'success':
+            serveText = 'New best saved onchain ✓';
+            serveColor = '#2eb872';
+            break;
+          case 'error':
+            serveText = `Save failed — tap to retry (${oc.error ?? ''})`;
+            serveTappable = true;
+            serveColor = '#c0392b';
+            break;
+          default:
+            serveText =
+              this.score > Number(oc.myBest ?? 0n)
+                ? '⛓ Tap to save this score onchain'
+                : `Onchain best: ${(oc.myBest ?? 0n).toLocaleString()} — not beaten this run`;
+            serveTappable = this.score > Number(oc.myBest ?? 0n);
+        }
+      }
+      ctx.font = `${serveTappable ? 'bold ' : ''}${pw * 0.042}px 'Trebuchet MS', sans-serif`;
       ctx.textAlign = 'center';
-      ctx.fillStyle = oc.status === 'error' ? '#c0392b' : '#8a6a3a';
-      const sub =
-        oc.status === 'error' && oc.error
-          ? oc.error
-          : oc.myBest !== null && oc.myBest > 0n
-            ? `Your onchain best: ${oc.myBest.toLocaleString()}`
-            : oc.address
-              ? 'Record this run on Base'
-              : 'Connects your wallet first';
-      ctx.fillText(sub, this.W / 2, sy + bh + pw * 0.06);
+      ctx.fillStyle = serveColor;
+      ctx.fillText(serveText, this.W / 2, by + pw * 0.035);
+      this.btnServe = serveTappable
+        ? { x: px + 10, y: by - pw * 0.01, w: pw - 20, h: pw * 0.08 }
+        : { x: 0, y: 0, w: 0, h: 0 };
+      if (oc.mintStatus === 'error' && oc.mintError) {
+        ctx.fillStyle = '#c0392b';
+        ctx.fillText(oc.mintError, this.W / 2, by + pw * 0.085);
+      }
+      by += pw * 0.1;
 
       // leaderboard link
-      const lbY = sy + bh + pw * 0.1;
       ctx.font = `bold ${pw * 0.05}px 'Trebuchet MS', sans-serif`;
       ctx.fillStyle = '#4f6df5';
-      ctx.fillText('🏆 View Leaderboard', this.W / 2, lbY + pw * 0.06);
+      ctx.fillText('🏆 View Leaderboard', this.W / 2, by + pw * 0.05);
       const lbW = pw * 0.6;
-      this.btnBoard = { x: this.W / 2 - lbW / 2, y: lbY, w: lbW, h: pw * 0.09 };
+      this.btnBoard = { x: this.W / 2 - lbW / 2, y: by, w: lbW, h: pw * 0.08 };
     } else {
+      const sw = bw * 2 + 12;
+      this.btnShareX = { x: this.W / 2 - sw / 2, y: by, w: sw, h: bh };
+      button(ctx, this.btnShareX, '#1d2229', 'Share on 𝕏');
       this.btnServe = { x: 0, y: 0, w: 0, h: 0 };
+      this.btnMint = { x: 0, y: 0, w: 0, h: 0 };
       this.btnBoard = { x: 0, y: 0, w: 0, h: 0 };
     }
   }

@@ -34,6 +34,9 @@ export interface OnchainState {
   nameError: string | null;
   leaderboard: LeaderboardEntry[] | null; // null = not fetched yet
   boardLoading: boolean;
+  badges: bigint | null; // milestone bitmask (bit N = tier-N first mixed)
+  mintStatus: TxStatus; // mintScoreCard transaction state
+  mintError: string | null;
 }
 
 export const state: OnchainState = {
@@ -49,6 +52,9 @@ export const state: OnchainState = {
   nameError: null,
   leaderboard: null,
   boardLoading: false,
+  badges: null,
+  mintStatus: 'idle',
+  mintError: null,
 };
 
 type Impl = typeof import('./wallet.ts');
@@ -72,19 +78,24 @@ export function claimUsername(name: string): void {
   void impl?.claimUsername(state, name);
 }
 
+export function mintScoreCard(): void {
+  void impl?.mintScoreCard(state);
+}
+
 export function refreshLeaderboard(): void {
   void impl?.refreshLeaderboard(state);
 }
 
 /** Called on every new game so the next run can be served again. */
 export function resetTx(): void {
-  const busy =
-    state.status === 'connecting' ||
-    state.status === 'switching' ||
-    state.status === 'signing' ||
-    state.status === 'confirming';
-  if (!busy) {
+  const busy = (s: TxStatus) =>
+    s === 'connecting' || s === 'switching' || s === 'signing' || s === 'confirming';
+  if (!busy(state.status)) {
     state.status = 'idle';
     state.error = null;
+  }
+  if (!busy(state.mintStatus)) {
+    state.mintStatus = 'idle';
+    state.mintError = null;
   }
 }

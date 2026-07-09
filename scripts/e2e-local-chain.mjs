@@ -116,20 +116,18 @@ await page.screenshot({ path: `${shots}/e2e-intro.png` });
 await page.click('#play-btn');
 await page.waitForTimeout(500);
 
-// force game over with a score, then serve it onchain
-await page.evaluate(() => {
+// force game over with a NEW BEST — the save must start automatically
+const prevBest = await page.evaluate(() => Number(window.__onchain.myBest ?? 0));
+await page.evaluate((newScore) => {
   const g = window.__game;
   g.bodies.push({ id: 999, tier: 2, x: 200, y: g.lineY + 40, vx: 0, vy: 0, r: 25, wobble: 0, spin: 0 });
-  g.score = 9876;
+  g.score = newScore;
   g.maxTierMade = 8;
   g.state = 'settle';
   g.settleTimer = 5;
-});
-await page.waitForTimeout(800);
-const serve = await page.evaluate(() => window.__game.btnServe);
-await page.mouse.click(serve.x + serve.w / 2, serve.y + serve.h / 2);
+}, prevBest + 5000);
 
-// wait for success
+// no clicks: wait for the auto-serve to complete
 let final = null;
 for (let i = 0; i < 30; i++) {
   await page.waitForTimeout(500);
@@ -141,8 +139,23 @@ for (let i = 0; i < 30; i++) {
   }));
   if (final.status === 'success' || final.status === 'error') break;
 }
-console.log('final state:', final);
+console.log('auto-serve (no click):', final);
 await page.screenshot({ path: `${shots}/e2e-saved.png` });
+
+// mint the score card NFT
+const mint = await page.evaluate(() => window.__game.btnMint);
+await page.mouse.click(mint.x + mint.w / 2, mint.y + mint.h / 2);
+let minted = null;
+for (let i = 0; i < 30; i++) {
+  await page.waitForTimeout(500);
+  minted = await page.evaluate(() => ({
+    status: window.__onchain.mintStatus,
+    error: window.__onchain.mintError,
+  }));
+  if (minted.status === 'success' || minted.status === 'error') break;
+}
+console.log('mint score card:', minted);
+await page.screenshot({ path: `${shots}/e2e-minted.png` });
 
 // leaderboard from the game-over panel
 const lb = await page.evaluate(() => window.__game.btnBoard);
@@ -156,4 +169,6 @@ await page.screenshot({ path: `${shots}/e2e-leaderboard.png` });
 
 console.log('page errors:', errors.length ? errors : 'none');
 await browser.close();
-if (final?.status !== 'success' || claimed?.status !== 'success') process.exit(1);
+if (final?.status !== 'success' || claimed?.status !== 'success' || minted?.status !== 'success') {
+  process.exit(1);
+}

@@ -149,6 +149,27 @@
         font-weight: bold;
         color: #2eb872;
       }
+      #badge-row[hidden] { display: none; }
+      .badge-title {
+        margin: 0 0 4px;
+        font-size: 0.8rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #8a6a3a;
+      }
+      #badge-icons {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+      }
+      #badge-icons canvas {
+        width: 44px;
+        height: 44px;
+      }
+      #badge-icons canvas.locked {
+        opacity: 0.25;
+        filter: grayscale(1);
+      }
       #board-list {
         margin: 0;
         padding: 0;
@@ -206,6 +227,10 @@
             <button id="claim-btn" class="btn orange">Claim</button>
           </div>
           <p id="name-status" class="status"></p>
+          <div id="badge-row" hidden>
+            <p class="badge-title">Milestone badges</p>
+            <div id="badge-icons"></div>
+          </div>
           <button id="board-btn" class="btn wood">🏆 &nbsp;Leaderboard</button>
         </div>
       </div>

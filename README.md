@@ -31,11 +31,27 @@ The game has an optional onchain layer built with **wagmi + viem** following the
   maintained onchain (`getLeaderboard`). Players pay their own gas — there is
   deliberately no gas sponsorship.
 - **Intro screen** — set your leaderboard username (an onchain transaction),
-  see your personal best as the milestone to beat, and open the leaderboard.
+  see your personal best as the milestone to beat, view your milestone badges,
+  and open the leaderboard.
+- **Auto-save new bests** — when a connected player finishes a run that beats
+  their onchain best, the `serveScore` transaction starts automatically (the
+  wallet still asks for the signature); no button hunting.
+- **Milestone badges** — the first time a player ever mixes each tier-6+
+  drink, `serveScore` awards a badge (onchain bitmask + event), shown lit/dim
+  on the intro screen.
+- **Score-card NFTs** — `mintScoreCard()` mints the player's best run as an
+  ERC-721 whose artwork is an SVG generated entirely by the contract
+  (`tokenURI` returns base64 JSON + SVG; no IPFS, no servers).
 - **Leaderboard** — top mixologists by best score with their claimed names,
   reachable from the intro and the game-over screen.
 - **Personal best in the HUD** — always visible under your score, switching to
   "New best!" the moment you pass it.
+- **Social sharing** — Recast opens the Farcaster cast composer; Share on 𝕏
+  renders a score-card PNG client-side and shares it via the native share
+  sheet (or downloads it and opens a prefilled tweet on desktop).
+
+Contract dependencies: `@openzeppelin/contracts@4.9` (ERC-721, Base64,
+Strings), compiled for the `paris` EVM so local ganache testing works.
 - **Wallet connection** — Base App in-app wallet (Farcaster mini app connector),
   [Base Account](https://docs.base.org/base-account/overview/what-is-base-account),
   and injected wallets (MetaMask), with auto-reconnect (`src/wallet.ts`).

@@ -53,10 +53,12 @@ export function init(state: OnchainState): void {
       if (account.address) {
         void refreshMyBest(state);
         void refreshUsername(state);
+        void refreshBadges(state);
         void detectCapabilities(state);
       } else {
         state.myBest = null;
         state.username = null;
+        state.badges = null;
         state.supportsBatching = null;
       }
     },
@@ -110,6 +112,22 @@ async function refreshUsername(state: OnchainState): Promise<void> {
       chainId: TALLY_CHAIN.id,
     });
     state.username = name || null;
+  } catch {
+    /* ignore */
+  }
+}
+
+async function refreshBadges(state: OnchainState): Promise<void> {
+  const addr = state.address;
+  if (!addr) return;
+  try {
+    state.badges = await readContract(config, {
+      address: TALLY_ADDRESS,
+      abi: tallyAbi,
+      functionName: 'badges',
+      args: [addr],
+      chainId: TALLY_CHAIN.id,
+    });
   } catch {
     /* ignore */
   }
@@ -264,10 +282,42 @@ export async function serveScore(
     );
     void refreshTally(state);
     void refreshMyBest(state);
+    void refreshBadges(state);
     void refreshLeaderboard(state);
   } catch (e) {
     state.status = 'error';
     state.error = shortError(e);
+  }
+}
+
+/** Mint the player's current best as an onchain-SVG score-card NFT. */
+export async function mintScoreCard(state: OnchainState): Promise<void> {
+  if (
+    state.mintStatus === 'connecting' ||
+    state.mintStatus === 'switching' ||
+    state.mintStatus === 'signing' ||
+    state.mintStatus === 'confirming' ||
+    state.mintStatus === 'success'
+  ) {
+    return;
+  }
+  state.mintError = null;
+  try {
+    await sendWrite(
+      state,
+      (s, v) => (s.mintStatus = v),
+      encodeFunctionData({ abi: tallyAbi, functionName: 'mintScoreCard' }),
+      () =>
+        writeContract(config, {
+          address: TALLY_ADDRESS,
+          abi: tallyAbi,
+          functionName: 'mintScoreCard',
+          chainId: TALLY_CHAIN.id,
+        }),
+    );
+  } catch (e) {
+    state.mintStatus = 'error';
+    state.mintError = shortError(e);
   }
 }
 

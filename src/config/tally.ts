@@ -109,6 +109,20 @@ export const tallyAbi = [
   },
   {
     type: 'function',
+    name: 'badges',
+    inputs: [{ name: '', type: 'address' }],
+    outputs: [{ name: '', type: 'uint256' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'mintScoreCard',
+    inputs: [],
+    outputs: [{ name: 'tokenId', type: 'uint256' }],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
     name: 'getLeaderboard',
     inputs: [],
     outputs: [
