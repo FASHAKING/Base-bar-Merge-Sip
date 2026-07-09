@@ -4,6 +4,9 @@
 import { DRINKS, MAX_TIER, drawDrink } from './drinks.ts';
 import { sfx } from './sfx.ts';
 import { haptic, shareScore } from './base.ts';
+import * as onchain from './onchain.ts';
+import { showLeaderboard } from './ui.ts';
+import { shareToX } from './share.ts';
 
 interface Body {
   id: number;
@@ -45,7 +48,7 @@ interface Rect {
 
 type State = 'aim' | 'settle' | 'over';
 
-const SPAWN_WEIGHTS = [30, 26, 20, 14, 10]; // tiers 0..4
+const SPAWN_WEIGHTS = [28, 24, 18, 13, 9]; // tiers 0..4, always available
 const BEST_KEY = 'merge-sip-best';
 
 export class Game {
@@ -79,17 +82,26 @@ export class Game {
 
   // input
   private dragging = false;
-  private trail: { t: number; x: number; y: number }[] = [];
 
-  // game-over buttons (hit areas)
+  // button hit areas
   private btnRestart: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private btnShare: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private btnServe: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private btnWallet: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private btnBoard: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private btnShareX: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private btnMint: Rect = { x: 0, y: 0, w: 0, h: 0 };
+
+  /** Personal best (this device), shown as the milestone to beat. */
+  get bestScore(): number {
+    return this.best;
+  }
 
   private time = 0;
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
-    this.best = Number(localStorage.getItem(BEST_KEY) || 0);
+    this.best = Number(safeGet(BEST_KEY) || 0);
     this.resize();
     this.reset();
 
@@ -116,7 +128,7 @@ export class Game {
     this.W = w;
     this.H = h;
 
-    const hudH = Math.max(86, h * 0.11);
+    const hudH = Math.max(100, h * 0.13);
     const chainH = Math.max(54, h * 0.075);
     const margin = Math.max(8, w * 0.025);
     const frameT = Math.max(10, w * 0.035);
@@ -159,13 +171,22 @@ export class Game {
     this.nextTier = this.spawnTier();
     this.aimX = this.inner.x + this.inner.w / 2;
     this.state = 'aim';
+    onchain.resetTx();
   }
 
   private spawnTier(): number {
-    const total = SPAWN_WEIGHTS.reduce((a, b) => a + b, 0);
+    // The dealer gets meaner as you progress: once you've mixed high tiers,
+    // big drinks start showing up in your hand — they crowd the board and
+    // force awkward gaps.
+    const weights = [...SPAWN_WEIGHTS];
+    if (this.maxTierMade >= 5) weights.push(8); // tier 5 (Blueberry Breeze)
+    if (this.maxTierMade >= 6) weights.push(6); // tier 6 (Mojito Royale)
+    if (this.maxTierMade >= 8) weights.push(4); // tier 7 (Berry Colada)
+
+    const total = weights.reduce((a, b) => a + b, 0);
     let roll = Math.random() * total;
-    for (let i = 0; i < SPAWN_WEIGHTS.length; i++) {
-      roll -= SPAWN_WEIGHTS[i];
+    for (let i = 0; i < weights.length; i++) {
+      roll -= weights[i];
       if (roll <= 0) return i;
     }
     return 0;
@@ -180,25 +201,38 @@ export class Game {
 
   private onDown(e: PointerEvent): void {
     const p = this.pos(e);
+    if (onchain.state.enabled && hit(this.btnWallet, p)) {
+      void onchain.toggleWallet();
+      return;
+    }
     if (this.state === 'over') {
       if (hit(this.btnRestart, p)) this.reset();
       else if (hit(this.btnShare, p)) {
         void shareScore(this.score, DRINKS[this.maxTierMade].name);
+      } else if (hit(this.btnShareX, p)) {
+        void shareToX(this.score, this.maxTierMade, onchain.state.username);
+      } else if (onchain.state.enabled && hit(this.btnMint, p)) {
+        onchain.mintScoreCard();
+      } else if (onchain.state.enabled && hit(this.btnServe, p)) {
+        onchain.serveScore(this.score, this.maxTierMade);
+      } else if (onchain.state.enabled && hit(this.btnBoard, p)) {
+        showLeaderboard();
       }
       return;
     }
     if (this.state !== 'aim') return;
     this.dragging = true;
-    this.trail = [{ t: performance.now(), x: p.x, y: p.y }];
+    try {
+      this.canvas.setPointerCapture(e.pointerId); // keep the drag when the pointer leaves the window
+    } catch {
+      /* not supported */
+    }
     this.moveAim(p.x);
   }
 
   private onMove(e: PointerEvent): void {
     if (!this.dragging || this.state !== 'aim') return;
-    const p = this.pos(e);
-    this.trail.push({ t: performance.now(), x: p.x, y: p.y });
-    if (this.trail.length > 24) this.trail.shift();
-    this.moveAim(p.x);
+    this.moveAim(this.pos(e).x);
   }
 
   private moveAim(px: number): void {
@@ -212,34 +246,16 @@ export class Game {
       return;
     }
     this.dragging = false;
-    const p = this.pos(e);
-    this.trail.push({ t: performance.now(), x: p.x, y: p.y });
+    this.moveAim(this.pos(e).x);
 
-    // flick velocity from the last ~90 ms of pointer motion
-    const now = performance.now();
-    const recent = this.trail.filter((s) => now - s.t < 90);
-    if (recent.length < 2) return;
-    const a = recent[0];
-    const b = recent[recent.length - 1];
-    const dt = (b.t - a.t) / 1000;
-    if (dt <= 0) return;
-    let fvx = (b.x - a.x) / dt;
-    let fvy = (b.y - a.y) / dt;
-    if (fvy > -140) return; // needs a clear upward flick
-
-    // clamp speed relative to board height and keep direction mostly upward
-    const minV = this.inner.h * 0.55;
-    const maxV = this.inner.h * 2.4;
-    const speed = clamp(Math.hypot(fvx, fvy) * 1.15, minV, maxV);
-    const maxSide = Math.tan((28 * Math.PI) / 180); // ±28° from vertical
-    fvx = clamp(fvx / Math.max(1, -fvy), -maxSide, maxSide);
-
+    // release to pour: launch straight up at a fixed speed
+    const speed = this.inner.h * 1.9;
     const body: Body = {
       id: this.nextId++,
       tier: this.currentTier,
       x: this.aimX,
       y: this.launchY,
-      vx: fvx * speed,
+      vx: 0,
       vy: -speed,
       r: this.radius(this.currentTier),
       wobble: 0,
@@ -448,9 +464,16 @@ export class Game {
   private gameOver(): void {
     this.state = 'over';
     this.best = Math.max(this.best, this.score);
-    localStorage.setItem(BEST_KEY, String(this.best));
+    safeSet(BEST_KEY, String(this.best));
     sfx.gameOver();
     haptic('heavy');
+
+    // auto-serve: a connected player's new onchain best is saved without
+    // needing a button press (the wallet still asks for the signature)
+    const oc = onchain.state;
+    if (oc.enabled && oc.address && this.score > 0 && this.score > Number(oc.myBest ?? 0n)) {
+      onchain.serveScore(this.score, this.maxTierMade);
+    }
   }
 
   // ---------------------------------------------------------------- render
@@ -590,9 +613,9 @@ export class Game {
       ctx.textAlign = 'center';
       ctx.lineWidth = 4;
       ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-      ctx.strokeText('Drag to aim · flick up to slide!', cx, y);
+      ctx.strokeText('Touch & drag to aim · release to pour!', cx, y);
       ctx.fillStyle = '#ffffff';
-      ctx.fillText('Drag to aim · flick up to slide!', cx, y);
+      ctx.fillText('Touch & drag to aim · release to pour!', cx, y);
     }
   }
 
@@ -620,6 +643,58 @@ export class Game {
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
     ctx.fillText(scoreTxt, pad + pillH * 1.1, topY + pillH / 2 + 1);
+
+    // personal best — the milestone to beat
+    const bestVal = Math.max(this.best, Number(onchain.state.myBest ?? 0n));
+    const bestY = topY + pillH + 9;
+    ctx.font = `bold ${pillH * 0.38}px 'Trebuchet MS', sans-serif`;
+    ctx.fillStyle =
+      this.score > bestVal && bestVal > 0 ? '#2eb872' : 'rgba(90, 52, 16, 0.9)';
+    ctx.fillText(
+      bestVal > 0
+        ? this.score > bestVal
+          ? `New best! (was ${bestVal.toLocaleString()})`
+          : `Best: ${bestVal.toLocaleString()}`
+        : 'Set your first best score!',
+      pad + 4,
+      bestY,
+    );
+
+    // wallet chip + global tally (only when a contract is configured)
+    if (onchain.state.enabled) {
+      const oc = onchain.state;
+      const wh = pillH * 0.76;
+      const wy = bestY + pillH * 0.32;
+      const label = oc.address
+        ? `${oc.address.slice(0, 5)}…${oc.address.slice(-3)}`
+        : oc.status === 'connecting'
+          ? 'Connecting…'
+          : 'Connect';
+      ctx.font = `bold ${wh * 0.48}px 'Trebuchet MS', sans-serif`;
+      const ww = ctx.measureText(label).width + wh * 1.3;
+      this.btnWallet = { x: pad, y: wy, w: ww, h: wh };
+      roundRect(ctx, pad, wy, ww, wh, wh / 2);
+      ctx.fillStyle = oc.address ? 'rgba(46, 184, 114, 0.9)' : 'rgba(79, 109, 245, 0.9)';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(pad + wh * 0.5, wy + wh / 2, wh * 0.18, 0, Math.PI * 2);
+      ctx.fillStyle = oc.address ? '#c8ffe3' : '#dbe2ff';
+      ctx.fill();
+      ctx.fillStyle = '#ffffff';
+      ctx.fillText(label, pad + wh * 0.9, wy + wh / 2 + 1);
+
+      if (oc.totalServed !== null) {
+        ctx.font = `${wh * 0.44}px 'Trebuchet MS', sans-serif`;
+        ctx.fillStyle = 'rgba(90, 52, 16, 0.85)';
+        ctx.fillText(
+          `🍹 ${oc.totalServed.toLocaleString()} served`,
+          pad + ww + 8,
+          wy + wh / 2 + 1,
+        );
+      }
+    } else {
+      this.btnWallet = { x: 0, y: 0, w: 0, h: 0 };
+    }
 
     // NEXT preview (top-right)
     const nr = pillH * 0.9;
@@ -705,8 +780,9 @@ export class Game {
     ctx.fillStyle = 'rgba(30, 20, 10, 0.6)';
     ctx.fillRect(0, 0, this.W, this.H);
 
-    const pw = Math.min(this.W * 0.84, 380);
-    const ph = Math.min(this.H * 0.46, 380);
+    const onchainRows = onchain.state.enabled ? 1 : 0;
+    const pw = Math.min(this.W * 0.86, 390);
+    const ph = Math.min(this.H * (0.52 + onchainRows * 0.12), 420 + onchainRows * 110);
     const px = this.W / 2 - pw / 2;
     const py = this.H / 2 - ph / 2;
     roundRect(ctx, px, py, pw, ph, 22);
@@ -716,29 +792,120 @@ export class Game {
     ctx.strokeStyle = '#c07d3e';
     ctx.stroke();
 
+    const oc = onchain.state;
+    // upper section compresses when the onchain rows are present
+    const f = oc.enabled
+      ? { title: 0.1, drink: 0.22, drinkR: 0.085, bestDrink: 0.33, score: 0.42, best: 0.48, rows: 0.54 }
+      : { title: 0.13, drink: 0.29, drinkR: 0.1, bestDrink: 0.44, score: 0.54, best: 0.61, rows: 0.68 };
+
     ctx.textAlign = 'center';
     ctx.fillStyle = '#c0392b';
     ctx.font = `bold ${pw * 0.09}px 'Trebuchet MS', sans-serif`;
-    ctx.fillText('Bar is backed up!', this.W / 2, py + ph * 0.15);
+    ctx.fillText('Bar is backed up!', this.W / 2, py + ph * f.title);
 
-    drawDrink(ctx, this.maxTierMade, this.W / 2, py + ph * 0.34, pw * 0.1);
+    drawDrink(ctx, this.maxTierMade, this.W / 2, py + ph * f.drink, pw * f.drinkR);
 
     ctx.fillStyle = '#5a3410';
     ctx.font = `${pw * 0.055}px 'Trebuchet MS', sans-serif`;
-    ctx.fillText(`Best drink: ${DRINKS[this.maxTierMade].name}`, this.W / 2, py + ph * 0.5);
+    ctx.fillText(`Best drink: ${DRINKS[this.maxTierMade].name}`, this.W / 2, py + ph * f.bestDrink);
     ctx.font = `bold ${pw * 0.085}px 'Trebuchet MS', sans-serif`;
-    ctx.fillText(`Score: ${this.score.toLocaleString()}`, this.W / 2, py + ph * 0.6);
+    ctx.fillText(`Score: ${this.score.toLocaleString()}`, this.W / 2, py + ph * f.score);
     ctx.font = `${pw * 0.05}px 'Trebuchet MS', sans-serif`;
     ctx.fillStyle = '#8a6a3a';
-    ctx.fillText(`Best: ${this.best.toLocaleString()}`, this.W / 2, py + ph * 0.68);
+    ctx.fillText(`Best: ${this.best.toLocaleString()}`, this.W / 2, py + ph * f.best);
 
-    const bw = pw * 0.38;
-    const bh = ph * 0.13;
-    const by = py + ph * 0.78;
-    this.btnRestart = { x: this.W / 2 - bw - 8, y: by, w: bw, h: bh };
-    this.btnShare = { x: this.W / 2 + 8, y: by, w: bw, h: bh };
+    const bw = pw * 0.42;
+    const bh = Math.max(40, ph * (oc.enabled ? 0.082 : 0.1));
+    const rowGap = 10;
+    let by = py + ph * f.rows;
+
+    // row 1: play again + recast (Farcaster)
+    this.btnRestart = { x: this.W / 2 - bw - 6, y: by, w: bw, h: bh };
+    this.btnShare = { x: this.W / 2 + 6, y: by, w: bw, h: bh };
     button(ctx, this.btnRestart, '#2eb872', 'Play Again');
-    button(ctx, this.btnShare, '#4f6df5', 'Share 🍹');
+    button(ctx, this.btnShare, '#7c65c1', 'Recast 💜');
+    by += bh + rowGap;
+
+    // row 2: share to X (+ mint when onchain is live)
+    if (oc.enabled) {
+      this.btnShareX = { x: this.W / 2 - bw - 6, y: by, w: bw, h: bh };
+      this.btnMint = { x: this.W / 2 + 6, y: by, w: bw, h: bh };
+      button(ctx, this.btnShareX, '#1d2229', 'Share on 𝕏');
+      const mintLabels: Record<string, [string, string]> = {
+        idle: ['Mint Card 🎴', '#f2811d'],
+        connecting: ['Confirm…', '#8a6a3a'],
+        switching: ['Switching…', '#8a6a3a'],
+        signing: ['Confirm…', '#8a6a3a'],
+        confirming: ['Minting…', '#8a6a3a'],
+        success: ['Minted ✓', '#2eb872'],
+        error: ['Retry Mint', '#c0392b'],
+      };
+      const [mLabel, mColor] = mintLabels[oc.mintStatus];
+      button(ctx, this.btnMint, mColor, mLabel);
+      by += bh + rowGap;
+
+      // onchain save status (auto-saves new bests; tappable when action needed)
+      let serveText: string;
+      let serveTappable = false;
+      let serveColor = '#8a6a3a';
+      if (!oc.address) {
+        serveText = '⛓ Tap to connect & save this score onchain';
+        serveTappable = true;
+        serveColor = '#f2811d';
+      } else {
+        switch (oc.status) {
+          case 'connecting':
+          case 'switching':
+          case 'signing':
+            serveText = 'Confirm in wallet to save your new best…';
+            break;
+          case 'confirming':
+            serveText = 'Saving your new best onchain…';
+            break;
+          case 'success':
+            serveText = 'New best saved onchain ✓';
+            serveColor = '#2eb872';
+            break;
+          case 'error':
+            serveText = `Save failed — tap to retry (${oc.error ?? ''})`;
+            serveTappable = true;
+            serveColor = '#c0392b';
+            break;
+          default:
+            serveText =
+              this.score > Number(oc.myBest ?? 0n)
+                ? '⛓ Tap to save this score onchain'
+                : `Onchain best: ${(oc.myBest ?? 0n).toLocaleString()} — not beaten this run`;
+            serveTappable = this.score > Number(oc.myBest ?? 0n);
+        }
+      }
+      ctx.font = `${serveTappable ? 'bold ' : ''}${pw * 0.042}px 'Trebuchet MS', sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.fillStyle = serveColor;
+      ctx.fillText(serveText, this.W / 2, by + pw * 0.035);
+      this.btnServe = serveTappable
+        ? { x: px + 10, y: by - pw * 0.01, w: pw - 20, h: pw * 0.08 }
+        : { x: 0, y: 0, w: 0, h: 0 };
+      if (oc.mintStatus === 'error' && oc.mintError) {
+        ctx.fillStyle = '#c0392b';
+        ctx.fillText(oc.mintError, this.W / 2, by + pw * 0.085);
+      }
+      by += pw * 0.1;
+
+      // leaderboard link
+      ctx.font = `bold ${pw * 0.05}px 'Trebuchet MS', sans-serif`;
+      ctx.fillStyle = '#4f6df5';
+      ctx.fillText('🏆 View Leaderboard', this.W / 2, by + pw * 0.05);
+      const lbW = pw * 0.6;
+      this.btnBoard = { x: this.W / 2 - lbW / 2, y: by, w: lbW, h: pw * 0.08 };
+    } else {
+      const sw = bw * 2 + 12;
+      this.btnShareX = { x: this.W / 2 - sw / 2, y: by, w: sw, h: bh };
+      button(ctx, this.btnShareX, '#1d2229', 'Share on 𝕏');
+      this.btnServe = { x: 0, y: 0, w: 0, h: 0 };
+      this.btnMint = { x: 0, y: 0, w: 0, h: 0 };
+      this.btnBoard = { x: 0, y: 0, w: 0, h: 0 };
+    }
   }
 }
 
@@ -746,6 +913,23 @@ export class Game {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+// storage can throw in sandboxed iframes and private browsing
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* best score just won't persist */
+  }
 }
 
 function hit(r: Rect, p: { x: number; y: number }): boolean {

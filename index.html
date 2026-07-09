@@ -43,10 +43,207 @@
         width: 100%;
         height: 100%;
       }
+      .overlay {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+        background: linear-gradient(180deg, rgba(126, 203, 232, 0.92), rgba(247, 226, 176, 0.94));
+        z-index: 10;
+      }
+      .overlay[hidden] {
+        display: none;
+      }
+      .card {
+        width: min(400px, 92vw);
+        max-height: 88vh;
+        overflow-y: auto;
+        background: #fff8ec;
+        border: 5px solid #c07d3e;
+        border-radius: 24px;
+        padding: 24px 22px;
+        box-shadow: 0 12px 40px rgba(90, 52, 16, 0.35);
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        text-align: center;
+      }
+      .card h1 {
+        margin: 0;
+        font-size: 2rem;
+        color: #c0392b;
+      }
+      .card h2 {
+        margin: 0;
+        font-size: 1.4rem;
+        color: #c0392b;
+      }
+      .tagline {
+        margin: 0;
+        color: #6b4a22;
+      }
+      .best-line {
+        margin: 0;
+        font-weight: bold;
+        color: #8a6a3a;
+      }
+      .btn {
+        border: none;
+        border-radius: 999px;
+        padding: 13px 18px;
+        font: bold 1.05rem 'Trebuchet MS', sans-serif;
+        color: #fff;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      .btn:active {
+        transform: scale(0.97);
+      }
+      .btn.green { background: #2eb872; }
+      .btn.blue { background: #4f6df5; }
+      .btn.orange { background: #f2811d; }
+      .btn.wood { background: #a8672f; }
+      .btn[disabled] {
+        opacity: 0.6;
+        cursor: default;
+      }
+      #wallet-section {
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+        border-top: 2px dashed #e2c9a0;
+        padding-top: 14px;
+      }
+      #wallet-section[hidden] { display: none; }
+      #claim-row {
+        display: flex;
+        gap: 8px;
+      }
+      #claim-row[hidden] {
+        display: none;
+      }
+      #claim-row input {
+        flex: 1;
+        min-width: 0;
+        border: 2px solid #c07d3e;
+        border-radius: 12px;
+        padding: 10px 12px;
+        font: 1rem 'Trebuchet MS', sans-serif;
+        color: #5a3410;
+        background: #fffdf8;
+      }
+      #claim-row input:focus {
+        outline: 3px solid rgba(242, 129, 29, 0.4);
+      }
+      .status {
+        margin: 0;
+        min-height: 1.1em;
+        font-size: 0.85rem;
+        color: #8a6a3a;
+      }
+      .status.error { color: #c0392b; }
+      #name-line {
+        margin: 0;
+        font-weight: bold;
+        color: #2eb872;
+      }
+      #badge-row[hidden] { display: none; }
+      .badge-title {
+        margin: 0 0 4px;
+        font-size: 0.8rem;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: #8a6a3a;
+      }
+      #badge-icons {
+        display: flex;
+        justify-content: center;
+        gap: 10px;
+      }
+      #badge-icons canvas {
+        width: 44px;
+        height: 44px;
+      }
+      #badge-icons canvas.locked {
+        opacity: 0.25;
+        filter: grayscale(1);
+      }
+      #board-list {
+        margin: 0;
+        padding: 0;
+        list-style: none;
+        text-align: left;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      #board-list li {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        background: #fff2dc;
+        border-radius: 12px;
+        padding: 8px 12px;
+        color: #5a3410;
+      }
+      #board-list .rank {
+        font-weight: bold;
+        width: 1.6em;
+        color: #c0392b;
+      }
+      #board-list .who {
+        flex: 1;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-weight: bold;
+      }
+      #board-list .pts {
+        font-variant-numeric: tabular-nums;
+        font-weight: bold;
+      }
+      #board-list .empty {
+        justify-content: center;
+        color: #8a6a3a;
+      }
     </style>
   </head>
   <body>
     <canvas id="game"></canvas>
+
+    <div id="intro" class="overlay">
+      <div class="card">
+        <h1>🍹 Merge Sip</h1>
+        <p class="tagline">Slide matching drinks together and mix your way up to the Legendary Tiki!</p>
+        <p id="intro-best" class="best-line"></p>
+        <button id="play-btn" class="btn green">▶ &nbsp;Start Mixing</button>
+        <div id="wallet-section" hidden>
+          <button id="connect-btn" class="btn blue">Connect Wallet</button>
+          <p id="name-line" hidden></p>
+          <div id="claim-row" hidden>
+            <input id="name-input" maxlength="16" placeholder="pick_a_username" autocomplete="off" spellcheck="false" />
+            <button id="claim-btn" class="btn orange">Claim</button>
+          </div>
+          <p id="name-status" class="status"></p>
+          <div id="badge-row" hidden>
+            <p class="badge-title">Milestone badges</p>
+            <div id="badge-icons"></div>
+          </div>
+          <button id="board-btn" class="btn wood">🏆 &nbsp;Leaderboard</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="board" class="overlay" hidden>
+      <div class="card">
+        <h2>🏆 Top Mixologists</h2>
+        <ol id="board-list"></ol>
+        <button id="board-close" class="btn green">Back</button>
+      </div>
+    </div>
+
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

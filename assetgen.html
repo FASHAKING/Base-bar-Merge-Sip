@@ -32,15 +32,47 @@
         ctx.fillText(text, x, y);
       }
 
-      // icon 1024
+      // icon 1024 — one bold centered subject, no text, reads at 48px
       {
         const c = document.getElementById('icon');
         const ctx = c.getContext('2d');
-        bg(ctx, 1024, 1024);
-        drawDrink(ctx, 9, 512, 470, 300);
-        drawDrink(ctx, 4, 200, 800, 130);
-        drawDrink(ctx, 6, 820, 780, 150);
-        title(ctx, 512, 985, 150, 'Merge Sip');
+        // tropical radial ground
+        const g = ctx.createRadialGradient(512, 400, 80, 512, 512, 760);
+        g.addColorStop(0, '#aee6f5');
+        g.addColorStop(0.55, '#7ecbe8');
+        g.addColorStop(1, '#4fa8d0');
+        ctx.fillStyle = g;
+        ctx.fillRect(0, 0, 1024, 1024);
+        // sun halo behind the mug
+        const halo = ctx.createRadialGradient(512, 470, 100, 512, 470, 430);
+        halo.addColorStop(0, 'rgba(255, 240, 170, 0.95)');
+        halo.addColorStop(1, 'rgba(255, 240, 170, 0)');
+        ctx.fillStyle = halo;
+        ctx.beginPath();
+        ctx.arc(512, 470, 430, 0, Math.PI * 2);
+        ctx.fill();
+        // sand arc at the bottom
+        ctx.beginPath();
+        ctx.ellipse(512, 1120, 720, 260, 0, 0, Math.PI * 2);
+        ctx.fillStyle = '#f3dfb2';
+        ctx.fill();
+        // sparkle stars
+        ctx.fillStyle = 'rgba(255,255,255,0.9)';
+        for (const [sx, sy, sr] of [[190, 200, 16], [840, 260, 12], [250, 640, 10], [830, 620, 14]]) {
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.beginPath();
+          for (let i = 0; i < 8; i++) {
+            const a = (i / 8) * Math.PI * 2;
+            const rr = i % 2 === 0 ? sr : sr * 0.35;
+            ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+          }
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+        // the Legendary Tiki, large and fully in frame
+        drawDrink(ctx, 9, 512, 520, 310);
       }
 
       // splash 200
@@ -49,7 +81,12 @@
         const ctx = c.getContext('2d');
         ctx.fillStyle = '#7ecbe8';
         ctx.fillRect(0, 0, 200, 200);
-        drawDrink(ctx, 9, 100, 100, 70);
+        const halo = ctx.createRadialGradient(100, 95, 20, 100, 95, 95);
+        halo.addColorStop(0, 'rgba(255, 240, 170, 0.9)');
+        halo.addColorStop(1, 'rgba(255, 240, 170, 0)');
+        ctx.fillStyle = halo;
+        ctx.fillRect(0, 0, 200, 200);
+        drawDrink(ctx, 9, 100, 100, 58);
       }
 
       // hero 1200x800
