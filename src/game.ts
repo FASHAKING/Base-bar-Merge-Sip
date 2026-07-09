@@ -92,7 +92,7 @@ export class Game {
 
   constructor(private canvas: HTMLCanvasElement) {
     this.ctx = canvas.getContext('2d')!;
-    this.best = Number(localStorage.getItem(BEST_KEY) || 0);
+    this.best = Number(safeGet(BEST_KEY) || 0);
     this.resize();
     this.reset();
 
@@ -458,7 +458,7 @@ export class Game {
   private gameOver(): void {
     this.state = 'over';
     this.best = Math.max(this.best, this.score);
-    localStorage.setItem(BEST_KEY, String(this.best));
+    safeSet(BEST_KEY, String(this.best));
     sfx.gameOver();
     haptic('heavy');
   }
@@ -826,6 +826,23 @@ export class Game {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+// storage can throw in sandboxed iframes and private browsing
+function safeGet(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+
+function safeSet(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* best score just won't persist */
+  }
 }
 
 function hit(r: Rect, p: { x: number; y: number }): boolean {

@@ -23,8 +23,13 @@ function isNetwork(v: unknown): v is Network {
   return v === 'base' || v === 'base-sepolia';
 }
 
-const ls = (key: string): string | null =>
-  typeof localStorage !== 'undefined' ? localStorage.getItem(key) : null;
+const ls = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null; // sandboxed iframe / private browsing
+  }
+};
 
 const lsNetwork = ls('merge-sip-network');
 const envNetwork = import.meta.env.VITE_TALLY_NETWORK as string | undefined;
