@@ -93,4 +93,30 @@ export const tallyAbi = [
     outputs: [],
     stateMutability: 'nonpayable',
   },
+  {
+    type: 'function',
+    name: 'usernameOf',
+    inputs: [{ name: '', type: 'address' }],
+    outputs: [{ name: '', type: 'string' }],
+    stateMutability: 'view',
+  },
+  {
+    type: 'function',
+    name: 'claimUsername',
+    inputs: [{ name: 'name', type: 'string' }],
+    outputs: [],
+    stateMutability: 'nonpayable',
+  },
+  {
+    type: 'function',
+    name: 'getLeaderboard',
+    inputs: [],
+    outputs: [
+      { name: 'players', type: 'address[]' },
+      { name: 'scores', type: 'uint256[]' },
+      { name: 'tiers', type: 'uint8[]' },
+      { name: 'names', type: 'string[]' },
+    ],
+    stateMutability: 'view',
+  },
 ] as const;

@@ -31,7 +31,7 @@ import { encodeFunctionData } from 'viem';
 import { base, baseSepolia } from '@wagmi/core/chains';
 import { TALLY_ADDRESS, TALLY_CHAIN, TALLY_RPC_URL, tallyAbi } from './config/tally.ts';
 import { isMiniApp } from './base.ts';
-import type { OnchainState } from './onchain.ts';
+import type { OnchainState, LeaderboardEntry } from './onchain.ts';
 
 // Both Base networks are configured so wallets on either can connect and be
 // switched; the tally contract itself lives on TALLY_CHAIN. The RPC override
@@ -52,14 +52,17 @@ export function init(state: OnchainState): void {
       state.address = account.address ?? null;
       if (account.address) {
         void refreshMyBest(state);
+        void refreshUsername(state);
         void detectCapabilities(state);
       } else {
         state.myBest = null;
+        state.username = null;
         state.supportsBatching = null;
       }
     },
   });
   void refreshTally(state);
+  void refreshLeaderboard(state);
   setInterval(() => void refreshTally(state), 45_000);
 }
 
@@ -92,6 +95,48 @@ async function refreshMyBest(state: OnchainState): Promise<void> {
     });
   } catch {
     /* ignore */
+  }
+}
+
+async function refreshUsername(state: OnchainState): Promise<void> {
+  const addr = state.address;
+  if (!addr) return;
+  try {
+    const name = await readContract(config, {
+      address: TALLY_ADDRESS,
+      abi: tallyAbi,
+      functionName: 'usernameOf',
+      args: [addr],
+      chainId: TALLY_CHAIN.id,
+    });
+    state.username = name || null;
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function refreshLeaderboard(state: OnchainState): Promise<void> {
+  if (state.boardLoading) return;
+  state.boardLoading = true;
+  try {
+    const [players, scores, tiers, names] = await readContract(config, {
+      address: TALLY_ADDRESS,
+      abi: tallyAbi,
+      functionName: 'getLeaderboard',
+      chainId: TALLY_CHAIN.id,
+    });
+    state.leaderboard = players.map(
+      (p, i): LeaderboardEntry => ({
+        player: p,
+        score: scores[i],
+        tier: Number(tiers[i]),
+        name: names[i],
+      }),
+    );
+  } catch {
+    /* keep the previous board */
+  } finally {
+    state.boardLoading = false;
   }
 }
 
@@ -153,9 +198,48 @@ export async function toggleWallet(state: OnchainState): Promise<void> {
 // ------------------------------------------------------------------- write
 
 /**
- * Record the finished game onchain. Handles connect → switch chain →
- * capability detection → batched call (smart wallets) or plain write (EOAs).
+ * Send a contract write, walking the shared path: connect → switch chain →
+ * capability detection → batched call (smart wallets, EIP-5792) or a plain
+ * transaction (EOAs). The user pays their own gas either way. Progress is
+ * reported through the given status setter.
  */
+async function sendWrite(
+  state: OnchainState,
+  setStatus: (s: OnchainState, v: OnchainState['status']) => void,
+  data: `0x${string}`,
+  write: () => Promise<`0x${string}`>,
+): Promise<void> {
+  // 1. connect if needed
+  if (!getAccount(config).address) {
+    setStatus(state, 'connecting');
+    await connect(config, { connector: pickConnector() });
+  }
+
+  // 2. make sure the wallet is on the contract's chain
+  if (getAccount(config).chainId !== TALLY_CHAIN.id) {
+    setStatus(state, 'switching');
+    await switchChain(config, { chainId: TALLY_CHAIN.id });
+  }
+
+  // 3. capability detection (EIP-5792)
+  if (state.supportsBatching === null) await detectCapabilities(state);
+
+  setStatus(state, 'signing');
+  if (state.supportsBatching) {
+    const { id } = await sendCalls(config, {
+      calls: [{ to: TALLY_ADDRESS, data }],
+    });
+    setStatus(state, 'confirming');
+    await waitForCallsStatus(config, { id });
+  } else {
+    const hash = await write();
+    setStatus(state, 'confirming');
+    await waitForTransactionReceipt(config, { hash, chainId: TALLY_CHAIN.id });
+  }
+  setStatus(state, 'success');
+}
+
+/** Record the finished game onchain (win or lose). */
 export async function serveScore(
   state: OnchainState,
   score: number,
@@ -163,57 +247,66 @@ export async function serveScore(
 ): Promise<void> {
   if (busy(state) || state.status === 'success') return;
   state.error = null;
-
+  const args = [BigInt(score), tier] as const;
   try {
-    // 1. connect if needed
-    if (!getAccount(config).address) {
-      state.status = 'connecting';
-      await connect(config, { connector: pickConnector() });
-    }
-
-    // 2. make sure the wallet is on the contract's chain
-    if (getAccount(config).chainId !== TALLY_CHAIN.id) {
-      state.status = 'switching';
-      await switchChain(config, { chainId: TALLY_CHAIN.id });
-    }
-
-    // 3. capability detection (EIP-5792)
-    if (state.supportsBatching === null) await detectCapabilities(state);
-
-    state.status = 'signing';
-    const args = [BigInt(score), tier] as const;
-
-    if (state.supportsBatching) {
-      // Smart wallet path: submit as an atomic batch of calls.
-      const { id } = await sendCalls(config, {
-        calls: [
-          {
-            to: TALLY_ADDRESS,
-            data: encodeFunctionData({ abi: tallyAbi, functionName: 'serveScore', args }),
-          },
-        ],
-      });
-      state.status = 'confirming';
-      await waitForCallsStatus(config, { id });
-    } else {
-      // EOA fallback: a single ordinary transaction.
-      const hash = await writeContract(config, {
-        address: TALLY_ADDRESS,
-        abi: tallyAbi,
-        functionName: 'serveScore',
-        args,
-        chainId: TALLY_CHAIN.id,
-      });
-      state.status = 'confirming';
-      await waitForTransactionReceipt(config, { hash, chainId: TALLY_CHAIN.id });
-    }
-
-    state.status = 'success';
+    await sendWrite(
+      state,
+      (s, v) => (s.status = v),
+      encodeFunctionData({ abi: tallyAbi, functionName: 'serveScore', args }),
+      () =>
+        writeContract(config, {
+          address: TALLY_ADDRESS,
+          abi: tallyAbi,
+          functionName: 'serveScore',
+          args,
+          chainId: TALLY_CHAIN.id,
+        }),
+    );
     void refreshTally(state);
     void refreshMyBest(state);
+    void refreshLeaderboard(state);
   } catch (e) {
     state.status = 'error';
     state.error = shortError(e);
+  }
+}
+
+/** Claim (or change) the player's leaderboard username. */
+export async function claimUsername(state: OnchainState, name: string): Promise<void> {
+  if (
+    state.nameStatus === 'connecting' ||
+    state.nameStatus === 'switching' ||
+    state.nameStatus === 'signing' ||
+    state.nameStatus === 'confirming'
+  ) {
+    return;
+  }
+  state.nameError = null;
+  const clean = name.trim().toLowerCase();
+  if (!/^[a-z0-9_]{3,16}$/.test(clean)) {
+    state.nameStatus = 'error';
+    state.nameError = '3-16 chars: a-z, 0-9, _';
+    return;
+  }
+  try {
+    await sendWrite(
+      state,
+      (s, v) => (s.nameStatus = v),
+      encodeFunctionData({ abi: tallyAbi, functionName: 'claimUsername', args: [clean] }),
+      () =>
+        writeContract(config, {
+          address: TALLY_ADDRESS,
+          abi: tallyAbi,
+          functionName: 'claimUsername',
+          args: [clean],
+          chainId: TALLY_CHAIN.id,
+        }),
+    );
+    state.username = clean;
+    void refreshLeaderboard(state);
+  } catch (e) {
+    state.nameStatus = 'error';
+    state.nameError = shortError(e);
   }
 }
 

@@ -87,10 +87,34 @@ await page.waitForTimeout(2500);
 const tally0 = await page.evaluate(() => window.__onchain.totalServed?.toString());
 console.log('initial totalServed read by game:', tally0);
 
-// connect
-const chip = await page.evaluate(() => window.__game.btnWallet);
-await page.mouse.click(chip.x + chip.w / 2, chip.y + chip.h / 2);
-await page.waitForTimeout(1500);
+// intro screen: connect + claim a username (auto-connects inside the flow)
+await page.click('#connect-btn');
+await page.waitForTimeout(1200);
+let claimed = await page.evaluate(() => ({
+  status: 'success',
+  username: window.__onchain.username,
+  err: null,
+}));
+if (!claimed.username) {
+  const name = 'sipper_' + Math.floor(Math.random() * 10000);
+  await page.fill('#name-input', name);
+  await page.click('#claim-btn');
+  for (let i = 0; i < 20; i++) {
+    await page.waitForTimeout(500);
+    claimed = await page.evaluate(() => ({
+      status: window.__onchain.nameStatus,
+      username: window.__onchain.username,
+      err: window.__onchain.nameError,
+    }));
+    if (claimed.status === 'success' || claimed.status === 'error') break;
+  }
+}
+console.log('username claim:', claimed);
+await page.screenshot({ path: `${shots}/e2e-intro.png` });
+
+// start the game
+await page.click('#play-btn');
+await page.waitForTimeout(500);
 
 // force game over with a score, then serve it onchain
 await page.evaluate(() => {
@@ -119,6 +143,17 @@ for (let i = 0; i < 30; i++) {
 }
 console.log('final state:', final);
 await page.screenshot({ path: `${shots}/e2e-saved.png` });
+
+// leaderboard from the game-over panel
+const lb = await page.evaluate(() => window.__game.btnBoard);
+await page.mouse.click(lb.x + lb.w / 2, lb.y + lb.h / 2);
+await page.waitForTimeout(1500);
+const boardText = await page.evaluate(() =>
+  [...document.querySelectorAll('#board-list li')].map((li) => li.textContent),
+);
+console.log('leaderboard overlay:', boardText);
+await page.screenshot({ path: `${shots}/e2e-leaderboard.png` });
+
 console.log('page errors:', errors.length ? errors : 'none');
 await browser.close();
-if (final?.status !== 'success') process.exit(1);
+if (final?.status !== 'success' || claimed?.status !== 'success') process.exit(1);

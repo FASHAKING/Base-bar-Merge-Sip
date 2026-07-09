@@ -25,8 +25,17 @@ bar back up past the dashed line!
 The game has an optional onchain layer built with **wagmi + viem** following the
 [Build an app on Base](https://docs.base.org/get-started/build-app) guide:
 
-- **`contracts/src/DrinkTally.sol`** — a tiny contract on Base Sepolia: a global
-  `totalServed` tally plus per-player `bestScore` / `bestTier`.
+- **`contracts/src/DrinkTally.sol`** — the game's onchain hub: unique
+  usernames (`claimUsername`, 3-16 chars a-z/0-9/_), a global `totalServed`
+  tally, per-player `bestScore` / `bestTier`, and a top-10 leaderboard
+  maintained onchain (`getLeaderboard`). Players pay their own gas — there is
+  deliberately no gas sponsorship.
+- **Intro screen** — set your leaderboard username (an onchain transaction),
+  see your personal best as the milestone to beat, and open the leaderboard.
+- **Leaderboard** — top mixologists by best score with their claimed names,
+  reachable from the intro and the game-over screen.
+- **Personal best in the HUD** — always visible under your score, switching to
+  "New best!" the moment you pass it.
 - **Wallet connection** — Base App in-app wallet (Farcaster mini app connector),
   [Base Account](https://docs.base.org/base-account/overview/what-is-base-account),
   and injected wallets (MetaMask), with auto-reconnect (`src/wallet.ts`).

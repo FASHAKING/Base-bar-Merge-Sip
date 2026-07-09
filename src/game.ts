@@ -5,6 +5,7 @@ import { DRINKS, MAX_TIER, drawDrink } from './drinks.ts';
 import { sfx } from './sfx.ts';
 import { haptic, shareScore } from './base.ts';
 import * as onchain from './onchain.ts';
+import { showLeaderboard } from './ui.ts';
 
 interface Body {
   id: number;
@@ -86,6 +87,12 @@ export class Game {
   private btnShare: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private btnServe: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private btnWallet: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private btnBoard: Rect = { x: 0, y: 0, w: 0, h: 0 };
+
+  /** Personal best (this device), shown as the milestone to beat. */
+  get bestScore(): number {
+    return this.best;
+  }
 
   private time = 0;
 
@@ -118,7 +125,7 @@ export class Game {
     this.W = w;
     this.H = h;
 
-    const hudH = Math.max(86, h * 0.11);
+    const hudH = Math.max(100, h * 0.13);
     const chainH = Math.max(54, h * 0.075);
     const margin = Math.max(8, w * 0.025);
     const frameT = Math.max(10, w * 0.035);
@@ -201,6 +208,8 @@ export class Game {
         void shareScore(this.score, DRINKS[this.maxTierMade].name);
       } else if (onchain.state.enabled && hit(this.btnServe, p)) {
         void onchain.serveScore(this.score, this.maxTierMade);
+      } else if (onchain.state.enabled && hit(this.btnBoard, p)) {
+        showLeaderboard();
       }
       return;
     }
@@ -621,11 +630,27 @@ export class Game {
     ctx.textBaseline = 'middle';
     ctx.fillText(scoreTxt, pad + pillH * 1.1, topY + pillH / 2 + 1);
 
+    // personal best — the milestone to beat
+    const bestVal = Math.max(this.best, Number(onchain.state.myBest ?? 0n));
+    const bestY = topY + pillH + 9;
+    ctx.font = `bold ${pillH * 0.38}px 'Trebuchet MS', sans-serif`;
+    ctx.fillStyle =
+      this.score > bestVal && bestVal > 0 ? '#2eb872' : 'rgba(90, 52, 16, 0.9)';
+    ctx.fillText(
+      bestVal > 0
+        ? this.score > bestVal
+          ? `New best! (was ${bestVal.toLocaleString()})`
+          : `Best: ${bestVal.toLocaleString()}`
+        : 'Set your first best score!',
+      pad + 4,
+      bestY,
+    );
+
     // wallet chip + global tally (only when a contract is configured)
     if (onchain.state.enabled) {
       const oc = onchain.state;
       const wh = pillH * 0.76;
-      const wy = topY + pillH + 6;
+      const wy = bestY + pillH * 0.32;
       const label = oc.address
         ? `${oc.address.slice(0, 5)}…${oc.address.slice(-3)}`
         : oc.status === 'connecting'
@@ -806,8 +831,17 @@ export class Game {
               ? 'Record this run on Base'
               : 'Connects your wallet first';
       ctx.fillText(sub, this.W / 2, sy + bh + pw * 0.06);
+
+      // leaderboard link
+      const lbY = sy + bh + pw * 0.1;
+      ctx.font = `bold ${pw * 0.05}px 'Trebuchet MS', sans-serif`;
+      ctx.fillStyle = '#4f6df5';
+      ctx.fillText('🏆 View Leaderboard', this.W / 2, lbY + pw * 0.06);
+      const lbW = pw * 0.6;
+      this.btnBoard = { x: this.W / 2 - lbW / 2, y: lbY, w: lbW, h: pw * 0.09 };
     } else {
       this.btnServe = { x: 0, y: 0, w: 0, h: 0 };
+      this.btnBoard = { x: 0, y: 0, w: 0, h: 0 };
     }
   }
 }

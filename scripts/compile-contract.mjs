@@ -13,6 +13,9 @@ const input = {
   sources: { 'DrinkTally.sol': { content: source } },
   settings: {
     optimizer: { enabled: true, runs: 200 },
+    // paris keeps the bytecode runnable on older local EVMs (ganache);
+    // Base mainnet/Sepolia run newer forks and execute it identically
+    evmVersion: 'paris',
     outputSelection: { '*': { '*': ['abi', 'evm.bytecode.object'] } },
   },
 };

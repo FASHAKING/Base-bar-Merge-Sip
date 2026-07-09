@@ -14,6 +14,13 @@ export type TxStatus =
   | 'success'
   | 'error';
 
+export interface LeaderboardEntry {
+  player: `0x${string}`;
+  score: bigint;
+  tier: number;
+  name: string;
+}
+
 export interface OnchainState {
   enabled: boolean;
   address: `0x${string}` | null;
@@ -22,6 +29,11 @@ export interface OnchainState {
   totalServed: bigint | null;
   myBest: bigint | null;
   supportsBatching: boolean | null; // null = unknown yet
+  username: string | null; // claimed leaderboard name
+  nameStatus: TxStatus; // claimUsername transaction state
+  nameError: string | null;
+  leaderboard: LeaderboardEntry[] | null; // null = not fetched yet
+  boardLoading: boolean;
 }
 
 export const state: OnchainState = {
@@ -32,6 +44,11 @@ export const state: OnchainState = {
   totalServed: null,
   myBest: null,
   supportsBatching: null,
+  username: null,
+  nameStatus: 'idle',
+  nameError: null,
+  leaderboard: null,
+  boardLoading: false,
 };
 
 type Impl = typeof import('./wallet.ts');
@@ -49,6 +66,14 @@ export function toggleWallet(): void {
 
 export function serveScore(score: number, tier: number): void {
   void impl?.serveScore(state, score, tier);
+}
+
+export function claimUsername(name: string): void {
+  void impl?.claimUsername(state, name);
+}
+
+export function refreshLeaderboard(): void {
+  void impl?.refreshLeaderboard(state);
 }
 
 /** Called on every new game so the next run can be served again. */
