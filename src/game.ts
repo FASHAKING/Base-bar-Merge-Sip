@@ -80,7 +80,6 @@ export class Game {
 
   // input
   private dragging = false;
-  private trail: { t: number; x: number; y: number }[] = [];
 
   // button hit areas
   private btnRestart: Rect = { x: 0, y: 0, w: 0, h: 0 };
@@ -199,16 +198,17 @@ export class Game {
     }
     if (this.state !== 'aim') return;
     this.dragging = true;
-    this.trail = [{ t: performance.now(), x: p.x, y: p.y }];
+    try {
+      this.canvas.setPointerCapture(e.pointerId); // keep the drag when the pointer leaves the window
+    } catch {
+      /* not supported */
+    }
     this.moveAim(p.x);
   }
 
   private onMove(e: PointerEvent): void {
     if (!this.dragging || this.state !== 'aim') return;
-    const p = this.pos(e);
-    this.trail.push({ t: performance.now(), x: p.x, y: p.y });
-    if (this.trail.length > 24) this.trail.shift();
-    this.moveAim(p.x);
+    this.moveAim(this.pos(e).x);
   }
 
   private moveAim(px: number): void {
@@ -222,34 +222,16 @@ export class Game {
       return;
     }
     this.dragging = false;
-    const p = this.pos(e);
-    this.trail.push({ t: performance.now(), x: p.x, y: p.y });
+    this.moveAim(this.pos(e).x);
 
-    // flick velocity from the last ~90 ms of pointer motion
-    const now = performance.now();
-    const recent = this.trail.filter((s) => now - s.t < 90);
-    if (recent.length < 2) return;
-    const a = recent[0];
-    const b = recent[recent.length - 1];
-    const dt = (b.t - a.t) / 1000;
-    if (dt <= 0) return;
-    let fvx = (b.x - a.x) / dt;
-    let fvy = (b.y - a.y) / dt;
-    if (fvy > -140) return; // needs a clear upward flick
-
-    // clamp speed relative to board height and keep direction mostly upward
-    const minV = this.inner.h * 0.55;
-    const maxV = this.inner.h * 2.4;
-    const speed = clamp(Math.hypot(fvx, fvy) * 1.15, minV, maxV);
-    const maxSide = Math.tan((28 * Math.PI) / 180); // ±28° from vertical
-    fvx = clamp(fvx / Math.max(1, -fvy), -maxSide, maxSide);
-
+    // release to pour: launch straight up at a fixed speed
+    const speed = this.inner.h * 1.9;
     const body: Body = {
       id: this.nextId++,
       tier: this.currentTier,
       x: this.aimX,
       y: this.launchY,
-      vx: fvx * speed,
+      vx: 0,
       vy: -speed,
       r: this.radius(this.currentTier),
       wobble: 0,
@@ -600,9 +582,9 @@ export class Game {
       ctx.textAlign = 'center';
       ctx.lineWidth = 4;
       ctx.strokeStyle = 'rgba(0,0,0,0.3)';
-      ctx.strokeText('Drag to aim · flick up to slide!', cx, y);
+      ctx.strokeText('Touch & drag to aim · release to pour!', cx, y);
       ctx.fillStyle = '#ffffff';
-      ctx.fillText('Drag to aim · flick up to slide!', cx, y);
+      ctx.fillText('Touch & drag to aim · release to pour!', cx, y);
     }
   }
 

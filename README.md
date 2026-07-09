@@ -13,7 +13,7 @@ bar back up past the dashed line!
 
 ## How to play
 
-- **Drag** left/right to position your drink, **flick up** to slide it.
+- **Touch and drag** left/right to position your drink, **release** to send it sliding up the board.
 - Drinks glide on the sand with friction and bounce off the walls and each other.
 - Two matching drinks that touch **merge** into the next tier (+points).
 - Complete the **To-Go Order** shown at the top for a coin bonus.
