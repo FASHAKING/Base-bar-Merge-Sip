@@ -468,12 +468,37 @@ export class Game {
     sfx.gameOver();
     haptic('heavy');
 
-    // auto-serve: a connected player's new onchain best is saved without
-    // needing a button press (the wallet still asks for the signature)
+    // auto-serve: a connected player's run is saved without a button press
+    // (the wallet still asks for the signature) whenever the run beats their
+    // onchain best OR unlocks a new milestone badge. Conservative when the
+    // badge cache hasn't loaded — never fire an unsolicited wallet prompt on
+    // a guess.
     const oc = onchain.state;
-    if (oc.enabled && oc.address && this.score > 0 && this.score > Number(oc.myBest ?? 0n)) {
+    if (oc.enabled && oc.address && this.score > 0 && this.runWorthSaving(false)) {
       onchain.serveScore(this.score, this.maxTierMade);
     }
+  }
+
+  /**
+   * Whether a finished run is worth writing onchain: it beats the player's
+   * onchain best, OR it may unlock a milestone badge (reached tier 5+ that
+   * isn't already earned).
+   *
+   * `assumeMilestoneWhenBadgesUnknown` decides the badge-cache-missing case:
+   * the manual save button passes `true` (user-initiated, and `serveScore`
+   * safely ignores already-earned badges, so don't block the save just
+   * because the read is pending/failed); auto-serve passes `false`.
+   */
+  private runWorthSaving(assumeMilestoneWhenBadgesUnknown: boolean): boolean {
+    const oc = onchain.state;
+    if (this.score > Number(oc.myBest ?? 0n)) return true;
+    if (this.maxTierMade >= 5) {
+      if (oc.badges === null) return assumeMilestoneWhenBadgesUnknown;
+      for (let t = 5; t <= this.maxTierMade; t++) {
+        if (((oc.badges >> BigInt(t)) & 1n) === 0n) return true;
+      }
+    }
+    return false;
   }
 
   // ---------------------------------------------------------------- render
@@ -871,12 +896,20 @@ export class Game {
             serveTappable = true;
             serveColor = '#c0392b';
             break;
-          default:
-            serveText =
-              this.score > Number(oc.myBest ?? 0n)
-                ? '⛓ Tap to save this score onchain'
-                : `Onchain best: ${(oc.myBest ?? 0n).toLocaleString()} — not beaten this run`;
-            serveTappable = this.score > Number(oc.myBest ?? 0n);
+          default: {
+            const beatsScore = this.score > Number(oc.myBest ?? 0n);
+            serveTappable = this.runWorthSaving(true);
+            if (!serveTappable) {
+              serveText = `Onchain best: ${(oc.myBest ?? 0n).toLocaleString()} — not beaten this run`;
+            } else if (beatsScore) {
+              serveText = '⛓ Tap to save this score onchain';
+            } else if (oc.badges !== null) {
+              serveText = '⛓ Tap to save your new milestone onchain';
+            } else {
+              // tier 5+ run, badge cache not loaded — offer the save neutrally
+              serveText = '⛓ Tap to save this run onchain';
+            }
+          }
         }
       }
       ctx.font = `${serveTappable ? 'bold ' : ''}${pw * 0.042}px 'Trebuchet MS', sans-serif`;
