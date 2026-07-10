@@ -5,7 +5,7 @@ import { DRINKS, MAX_TIER, drawDrink } from './drinks.ts';
 import { sfx } from './sfx.ts';
 import { haptic, shareScore } from './base.ts';
 import * as onchain from './onchain.ts';
-import { showLeaderboard } from './ui.ts';
+import { showLeaderboard, getUsername } from './ui.ts';
 import { shareToX } from './share.ts';
 
 interface Body {
@@ -210,7 +210,7 @@ export class Game {
       else if (hit(this.btnShare, p)) {
         void shareScore(this.score, DRINKS[this.maxTierMade].name);
       } else if (hit(this.btnShareX, p)) {
-        void shareToX(this.score, this.maxTierMade, onchain.state.username);
+        void shareToX(this.score, this.maxTierMade, onchain.state.username ?? getUsername());
       } else if (onchain.state.enabled && hit(this.btnMint, p)) {
         onchain.mintScoreCard();
       } else if (onchain.state.enabled && hit(this.btnServe, p)) {

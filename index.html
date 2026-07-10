@@ -117,14 +117,17 @@
         padding-top: 14px;
       }
       #wallet-section[hidden] { display: none; }
-      #claim-row {
+      #claim-row,
+      #register-row {
         display: flex;
         gap: 8px;
       }
-      #claim-row[hidden] {
+      #claim-row[hidden],
+      #register-row[hidden] {
         display: none;
       }
-      #claim-row input {
+      #claim-row input,
+      #register-row input {
         flex: 1;
         min-width: 0;
         border: 2px solid #c07d3e;
@@ -134,8 +137,18 @@
         color: #5a3410;
         background: #fffdf8;
       }
-      #claim-row input:focus {
+      #claim-row input:focus,
+      #register-row input:focus {
         outline: 3px solid rgba(242, 129, 29, 0.4);
+      }
+      #username-line {
+        margin: 0;
+        font-weight: bold;
+        color: #2eb872;
+        cursor: pointer;
+      }
+      #username-line[hidden] {
+        display: none;
       }
       .status {
         margin: 0;
@@ -218,7 +231,13 @@
         <h1>🍹 Merge Sip</h1>
         <p class="tagline">Slide matching drinks together and mix your way up to the Legendary Tiki!</p>
         <p id="intro-best" class="best-line"></p>
-        <button id="play-btn" class="btn green">▶ &nbsp;Start Mixing</button>
+        <div id="register-row">
+          <input id="username-input" maxlength="16" placeholder="pick_a_username" autocomplete="off" spellcheck="false" />
+          <button id="register-btn" class="btn orange">Register</button>
+        </div>
+        <p id="username-line" hidden></p>
+        <p id="register-status" class="status"></p>
+        <button id="play-btn" class="btn green" disabled>▶ &nbsp;Start Mixing</button>
         <div id="wallet-section" hidden>
           <button id="connect-btn" class="btn blue">Connect Wallet</button>
           <p id="name-line" hidden></p>

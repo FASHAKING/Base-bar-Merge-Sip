@@ -30,9 +30,11 @@ The game has an optional onchain layer built with **wagmi + viem** following the
   tally, per-player `bestScore` / `bestTier`, and a top-10 leaderboard
   maintained onchain (`getLeaderboard`). Players pay their own gas — there is
   deliberately no gas sponsorship.
-- **Intro screen** — set your leaderboard username (an onchain transaction),
-  see your personal best as the milestone to beat, view your milestone badges,
-  and open the leaderboard.
+- **Intro screen** — register a username before the game unlocks (stored
+  locally under `merge-sip-username`, 3-16 chars a-z/0-9/_), then optionally
+  claim it as your onchain leaderboard handle (an onchain transaction), see
+  your personal best as the milestone to beat, view your milestone badges, and
+  open the leaderboard.
 - **Auto-save new bests** — when a connected player finishes a run that beats
   their onchain best, the `serveScore` transaction starts automatically (the
   wallet still asks for the signature); no button hunting.

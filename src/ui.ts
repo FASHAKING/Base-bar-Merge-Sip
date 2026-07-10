@@ -14,12 +14,54 @@ const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) 
 
 let opts: UiOptions;
 
+// Local leaderboard-independent registration: every player picks a username in
+// the startup menu before the game unlocks. Same shape as the onchain name
+// (3-16 chars, a-z/0-9/_) so it can double as the claimable leaderboard handle.
+const USERNAME_KEY = 'merge-sip-username';
+const USERNAME_RE = /^[a-z0-9_]{3,16}$/;
+
+function loadUsername(): string | null {
+  try {
+    const v = localStorage.getItem(USERNAME_KEY);
+    return v && USERNAME_RE.test(v) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+let localUsername: string | null = loadUsername();
+
+/** The registered username, or null if the player hasn't registered one yet. */
+export function getUsername(): string | null {
+  return localUsername;
+}
+
 export function initUi(options: UiOptions): void {
   opts = options;
 
   $('play-btn').addEventListener('click', () => {
+    // Guard: the game stays locked until a username is registered.
+    if (!localUsername) {
+      renderRegistration();
+      $<HTMLInputElement>('username-input').focus();
+      return;
+    }
     $('intro').hidden = true;
   });
+
+  $('register-btn').addEventListener('click', registerUsername);
+  $('username-input').addEventListener('keydown', (e) => {
+    if ((e as KeyboardEvent).key === 'Enter') registerUsername();
+  });
+  // Tap the "Playing as @name" line to change it before starting.
+  $('username-line').addEventListener('click', () => {
+    const input = $<HTMLInputElement>('username-input');
+    input.value = localUsername ?? '';
+    $('register-row').hidden = false;
+    $('username-line').hidden = true;
+    input.focus();
+  });
+  renderRegistration();
 
   $('board-btn').addEventListener('click', showLeaderboard);
   $('board-close').addEventListener('click', () => {
@@ -46,6 +88,47 @@ export function initUi(options: UiOptions): void {
 
   render();
   setInterval(render, 400);
+}
+
+function registerUsername(): void {
+  const input = $<HTMLInputElement>('username-input');
+  const status = $('register-status');
+  const clean = input.value.trim().toLowerCase();
+  if (!USERNAME_RE.test(clean)) {
+    status.classList.add('error');
+    status.textContent = '3-16 chars: a-z, 0-9, _';
+    return;
+  }
+  localUsername = clean;
+  try {
+    localStorage.setItem(USERNAME_KEY, clean);
+  } catch {
+    // sandboxed iframe / private browsing — keep it in memory for this session
+  }
+  renderRegistration();
+}
+
+function renderRegistration(): void {
+  const registerRow = $('register-row');
+  const usernameLine = $('username-line');
+  const status = $('register-status');
+  const playBtn = $<HTMLButtonElement>('play-btn');
+
+  if (localUsername) {
+    registerRow.hidden = true;
+    usernameLine.hidden = false;
+    usernameLine.textContent = `Playing as @${localUsername} — tap to change`;
+    status.classList.remove('error');
+    status.textContent = '';
+    playBtn.disabled = false;
+  } else {
+    registerRow.hidden = false;
+    usernameLine.hidden = true;
+    playBtn.disabled = true;
+    if (!status.classList.contains('error')) {
+      status.textContent = 'Register a username to start playing';
+    }
+  }
 }
 
 function claim(): void {
