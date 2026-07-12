@@ -13,6 +13,7 @@ import {
   disconnect,
   reconnect,
   getAccount,
+  getPublicClient,
   watchAccount,
   readContract,
   writeContract,
@@ -27,9 +28,16 @@ import {
 } from '@wagmi/core/experimental';
 import { baseAccount } from '@wagmi/connectors';
 import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector';
-import { encodeFunctionData } from 'viem';
+import { encodeFunctionData, parseAbiItem } from 'viem';
 import { base, baseSepolia } from '@wagmi/core/chains';
-import { TALLY_ADDRESS, TALLY_CHAIN, TALLY_RPC_URL, tallyAbi } from './config/tally.ts';
+import {
+  TALLY_ADDRESS,
+  TALLY_CHAIN,
+  TALLY_RPC_URL,
+  TALLY_DEPLOY_BLOCK,
+  WEEK_OF_BLOCKS,
+  tallyAbi,
+} from './config/tally.ts';
 import { isMiniApp } from './base.ts';
 import type { OnchainState, LeaderboardEntry } from './onchain.ts';
 
@@ -155,6 +163,124 @@ export async function refreshLeaderboard(state: OnchainState): Promise<void> {
     /* keep the previous board */
   } finally {
     state.boardLoading = false;
+  }
+}
+
+// ------------------------------------------------------------- weekly board
+//
+// The contract only stores the all-time top 10, so "this week" is rebuilt
+// client-side from ScoreServed events. Scanned block ranges are cached in
+// localStorage so subsequent opens only fetch the delta.
+
+const scoreServedEvent = parseAbiItem(
+  'event ScoreServed(address indexed player, uint256 score, uint8 tier, uint256 totalServed)',
+);
+const WEEKLY_CACHE_KEY = 'merge-sip-weekly';
+const LOG_CHUNK = 10_000n; // public-RPC friendly getLogs range
+
+interface WeeklyCache {
+  to: string; // last block scanned (inclusive)
+  events: [player: string, score: string, tier: number, block: string][];
+}
+
+function readWeeklyCache(): WeeklyCache | null {
+  try {
+    const raw = localStorage.getItem(WEEKLY_CACHE_KEY);
+    if (!raw) return null;
+    const v = JSON.parse(raw) as WeeklyCache;
+    return typeof v.to === 'string' && Array.isArray(v.events) ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function refreshWeekly(state: OnchainState): Promise<void> {
+  if (state.weeklyLoading) return;
+  state.weeklyLoading = true;
+  try {
+    const client = getPublicClient(config, { chainId: TALLY_CHAIN.id });
+    if (!client) return;
+    const latest = await client.getBlockNumber();
+    const windowStart =
+      latest > TALLY_DEPLOY_BLOCK + WEEK_OF_BLOCKS ? latest - WEEK_OF_BLOCKS : TALLY_DEPLOY_BLOCK;
+
+    // reuse the cached scan when it overlaps this week's window
+    const cache = readWeeklyCache();
+    const cachedTo = cache ? BigInt(cache.to) : -1n;
+    const events: WeeklyCache['events'] =
+      cache && cachedTo >= windowStart
+        ? cache.events.filter((e) => BigInt(e[3]) >= windowStart)
+        : [];
+    let from = cache && cachedTo >= windowStart ? cachedTo + 1n : windowStart;
+
+    while (from <= latest) {
+      const to = from + LOG_CHUNK - 1n > latest ? latest : from + LOG_CHUNK - 1n;
+      const logs = await client.getLogs({
+        address: TALLY_ADDRESS,
+        event: scoreServedEvent,
+        fromBlock: from,
+        toBlock: to,
+      });
+      for (const log of logs) {
+        if (log.args.player && log.args.score !== undefined) {
+          events.push([
+            log.args.player,
+            log.args.score.toString(),
+            Number(log.args.tier ?? 0),
+            (log.blockNumber ?? to).toString(),
+          ]);
+        }
+      }
+      from = to + 1n;
+    }
+
+    try {
+      localStorage.setItem(WEEKLY_CACHE_KEY, JSON.stringify({ to: latest.toString(), events }));
+    } catch {
+      /* cache is an optimization only */
+    }
+
+    // best score per player inside the window
+    const best = new Map<string, { score: bigint; tier: number }>();
+    for (const [player, score, tier] of events) {
+      const key = player.toLowerCase();
+      const s = BigInt(score);
+      const cur = best.get(key);
+      if (!cur || s > cur.score) best.set(key, { score: s, tier });
+    }
+    const top = [...best.entries()]
+      .sort((a, b) => (b[1].score > a[1].score ? 1 : b[1].score < a[1].score ? -1 : 0))
+      .slice(0, 10);
+
+    // usernames: reuse the all-time board's, fetch the rest
+    const known = new Map(
+      (state.leaderboard ?? []).map((e) => [e.player.toLowerCase(), e.name]),
+    );
+    const entries = await Promise.all(
+      top.map(async ([player, v]): Promise<LeaderboardEntry> => {
+        let name = known.get(player) ?? '';
+        if (!name) {
+          try {
+            name = await readContract(config, {
+              address: TALLY_ADDRESS,
+              abi: tallyAbi,
+              functionName: 'usernameOf',
+              args: [player as `0x${string}`],
+              chainId: TALLY_CHAIN.id,
+            });
+          } catch {
+            /* fall back to the address */
+          }
+        }
+        return { player: player as `0x${string}`, score: v.score, tier: v.tier, name };
+      }),
+    );
+    state.weekly = entries;
+  } catch (e) {
+    console.warn('[merge-sip] weekly board scan failed:', e);
+    /* keep the previous view */
+  } finally {
+    state.weeklyLoading = false;
   }
 }
 

@@ -9,7 +9,10 @@ const game = new Game(canvas);
 (window as unknown as { __game: Game }).__game = game;
 (window as unknown as { __onchain: typeof onchainState }).__onchain = onchainState;
 
-initUi({ getBest: () => game.bestScore });
+initUi({
+  getBest: () => game.bestScore,
+  startDaily: () => game.setMode('daily'),
+});
 
 let last = performance.now();
 function loop(now: number): void {

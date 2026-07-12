@@ -3,6 +3,7 @@
 
 import { DRINKS, drawDrink } from './drinks.ts';
 import { APP_URL, openExternal } from './base.ts';
+import { challengeUrl } from './modes.ts';
 
 /** Render a 1000x1000 score card PNG blob. */
 export async function renderScoreCard(
@@ -74,8 +75,11 @@ export async function shareToX(
   score: number,
   tier: number,
   username: string | null,
+  daily: number | null = null,
 ): Promise<void> {
-  const text = `I scored ${score.toLocaleString()} mixing my way to a ${DRINKS[tier].name} in Merge Sip 🍹 Can you out-pour me?`;
+  const dailyTag = daily ? `Daily Mix #${daily}: ` : '';
+  const text = `${dailyTag}I scored ${score.toLocaleString()} mixing my way to a ${DRINKS[tier].name} in Merge Sip 🍹 Can you out-pour me?`;
+  const url = challengeUrl(APP_URL, score, username);
   try {
     const blob = await renderScoreCard(score, tier, username);
     const file = new File([blob], 'merge-sip-score.png', { type: 'image/png' });
@@ -83,7 +87,7 @@ export async function shareToX(
     if (nav.canShare?.({ files: [file] })) {
       // native share sheet with the image attached — pick X there
       try {
-        await nav.share({ files: [file], text: `${text} ${APP_URL}` });
+        await nav.share({ files: [file], text: `${text} ${url}` });
       } catch {
         /* user closed the sheet */
       }
@@ -98,9 +102,7 @@ export async function shareToX(
   } catch {
     /* rendering failed — still open the composer with text */
   }
-  openExternal(
-    `https://twitter.com/intent/tweet?text=${encodeURIComponent(`${text} ${APP_URL}`)}`,
-  );
+  openExternal(`https://twitter.com/intent/tweet?text=${encodeURIComponent(`${text} ${url}`)}`);
 }
 
 function roundedRect(

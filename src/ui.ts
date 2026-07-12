@@ -3,11 +3,14 @@
 
 import * as onchain from './onchain.ts';
 import { drawDrink } from './drinks.ts';
+import { getStreak, dailyNumber, getDailyBest, parseChallenge } from './modes.ts';
 
 const BADGE_TIERS = [5, 6, 7, 8, 9];
 
 interface UiOptions {
   getBest: () => number;
+  /** Start the seeded daily-challenge run (also hides the intro). */
+  startDaily?: () => void;
 }
 
 const $ = <T extends HTMLElement>(id: string): T => document.getElementById(id) as T;
@@ -49,6 +52,24 @@ export function initUi(options: UiOptions): void {
     $('intro').hidden = true;
   });
 
+  $('daily-btn').addEventListener('click', () => {
+    if (!localUsername) {
+      renderRegistration();
+      $<HTMLInputElement>('username-input').focus();
+      return;
+    }
+    opts.startDaily?.();
+    $('intro').hidden = true;
+  });
+
+  // challenge banner when the app was opened from a shared score link
+  const challenge = parseChallenge();
+  if (challenge) {
+    const line = $('challenge-line');
+    line.hidden = false;
+    line.textContent = `🎯 @${challenge.by} challenged you — beat ${challenge.score.toLocaleString()}!`;
+  }
+
   $('register-btn').addEventListener('click', registerUsername);
   $('username-input').addEventListener('keydown', (e) => {
     if ((e as KeyboardEvent).key === 'Enter') registerUsername();
@@ -67,6 +88,8 @@ export function initUi(options: UiOptions): void {
   $('board-close').addEventListener('click', () => {
     $('board').hidden = true;
   });
+  $('tab-all').addEventListener('click', () => setBoardView('all'));
+  $('tab-week').addEventListener('click', () => setBoardView('week'));
 
   $('connect-btn').addEventListener('click', () => onchain.toggleWallet());
   $('claim-btn').addEventListener('click', claim);
@@ -113,6 +136,7 @@ function renderRegistration(): void {
   const usernameLine = $('username-line');
   const status = $('register-status');
   const playBtn = $<HTMLButtonElement>('play-btn');
+  const dailyBtn = $<HTMLButtonElement>('daily-btn');
 
   if (localUsername) {
     registerRow.hidden = true;
@@ -121,10 +145,12 @@ function renderRegistration(): void {
     status.classList.remove('error');
     status.textContent = '';
     playBtn.disabled = false;
+    dailyBtn.disabled = false;
   } else {
     registerRow.hidden = false;
     usernameLine.hidden = true;
     playBtn.disabled = true;
+    dailyBtn.disabled = true;
     if (!status.classList.contains('error')) {
       status.textContent = 'Register a username to start playing';
     }
@@ -136,8 +162,19 @@ function claim(): void {
   onchain.claimUsername(input.value);
 }
 
+let boardView: 'all' | 'week' = 'all';
+
+function setBoardView(view: 'all' | 'week'): void {
+  boardView = view;
+  $('tab-all').classList.toggle('active', view === 'all');
+  $('tab-week').classList.toggle('active', view === 'week');
+  if (view === 'week') onchain.refreshWeekly();
+  renderBoard();
+}
+
 export function showLeaderboard(): void {
   onchain.refreshLeaderboard();
+  if (boardView === 'week') onchain.refreshWeekly();
   $('board').hidden = false;
   renderBoard();
 }
@@ -145,9 +182,20 @@ export function showLeaderboard(): void {
 function render(): void {
   const s = onchain.state;
 
-  // personal best (local + onchain)
+  // personal best (local + onchain) + play streak
   const best = Math.max(opts.getBest(), Number(s.myBest ?? 0n));
-  $('intro-best').textContent = best > 0 ? `Your best: ${best.toLocaleString()} — beat it!` : 'First shift behind the bar — good luck!';
+  const streak = getStreak();
+  const streakTxt = streak >= 2 ? ` · 🔥 ${streak}-day streak` : '';
+  $('intro-best').textContent =
+    (best > 0 ? `Your best: ${best.toLocaleString()} — beat it!` : 'First shift behind the bar — good luck!') + streakTxt;
+
+  // daily challenge status
+  const dailyBest = getDailyBest();
+  $('daily-btn').textContent = `🌞  Daily Mix #${dailyNumber()}`;
+  $('daily-status').textContent =
+    dailyBest > 0
+      ? `Today's daily best: ${dailyBest.toLocaleString()}`
+      : 'Same drinks for everyone, once a day — set the mark!';
 
   // wallet section only exists when a contract is configured
   $('wallet-section').hidden = !s.enabled;
@@ -196,6 +244,9 @@ function render(): void {
 
   nameLine.hidden = true;
   claimRow.hidden = false;
+  // offer the locally registered name as the onchain handle (one tap to claim)
+  const nameInput = $<HTMLInputElement>('name-input');
+  if (!nameInput.value && localUsername) nameInput.value = localUsername;
   const labels: Record<string, string> = {
     idle: 'Claim',
     connecting: '…',
@@ -226,15 +277,20 @@ function renderBoard(): void {
     list.innerHTML = '<li class="empty">Leaderboard goes live once the contract is deployed</li>';
     return;
   }
-  if (s.leaderboard === null) {
-    list.innerHTML = `<li class="empty">${s.boardLoading ? 'Pouring the standings…' : 'Leaderboard unavailable — check your connection'}</li>`;
+  const board = boardView === 'week' ? s.weekly : s.leaderboard;
+  const loading = boardView === 'week' ? s.weeklyLoading : s.boardLoading;
+  if (board === null) {
+    list.innerHTML = `<li class="empty">${loading ? 'Pouring the standings…' : 'Leaderboard unavailable — check your connection'}</li>`;
     return;
   }
-  if (s.leaderboard.length === 0) {
-    list.innerHTML = '<li class="empty">No scores served yet — be the first! 🍹</li>';
+  if (board.length === 0) {
+    list.innerHTML =
+      boardView === 'week'
+        ? '<li class="empty">No scores served this week — set the pace! 🍹</li>'
+        : '<li class="empty">No scores served yet — be the first! 🍹</li>';
     return;
   }
-  s.leaderboard.forEach((e, i) => {
+  board.forEach((e, i) => {
     const li = document.createElement('li');
     const rank = document.createElement('span');
     rank.className = 'rank';

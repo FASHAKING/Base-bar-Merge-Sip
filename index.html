@@ -147,6 +147,12 @@
         color: #2eb872;
         cursor: pointer;
       }
+      #challenge-line {
+        color: #e8801a;
+      }
+      #challenge-line[hidden] {
+        display: none;
+      }
       #username-line[hidden] {
         display: none;
       }
@@ -182,6 +188,26 @@
       #badge-icons canvas.locked {
         opacity: 0.25;
         filter: grayscale(1);
+      }
+      #board-tabs {
+        display: flex;
+        gap: 8px;
+        justify-content: center;
+      }
+      .tab {
+        border: 2px solid #c07d3e;
+        border-radius: 999px;
+        padding: 7px 16px;
+        font: bold 0.9rem 'Trebuchet MS', sans-serif;
+        color: #8a6a3a;
+        background: #fffdf8;
+        cursor: pointer;
+        touch-action: manipulation;
+      }
+      .tab.active {
+        background: #f2811d;
+        border-color: #f2811d;
+        color: #fff;
       }
       #board-list {
         margin: 0;
@@ -231,6 +257,7 @@
         <h1>🍹 Merge Sip</h1>
         <p class="tagline">Slide matching drinks together and mix your way up to the Legendary Tiki!</p>
         <p id="intro-best" class="best-line"></p>
+        <p id="challenge-line" class="best-line" hidden></p>
         <div id="register-row">
           <input id="username-input" maxlength="16" placeholder="pick_a_username" autocomplete="off" spellcheck="false" />
           <button id="register-btn" class="btn orange">Register</button>
@@ -238,6 +265,8 @@
         <p id="username-line" hidden></p>
         <p id="register-status" class="status"></p>
         <button id="play-btn" class="btn green" disabled>▶ &nbsp;Start Mixing</button>
+        <button id="daily-btn" class="btn orange" disabled>🌞 &nbsp;Daily Mix</button>
+        <p id="daily-status" class="status"></p>
         <div id="wallet-section" hidden>
           <button id="connect-btn" class="btn blue">Connect Wallet</button>
           <p id="name-line" hidden></p>
@@ -258,6 +287,10 @@
     <div id="board" class="overlay" hidden>
       <div class="card">
         <h2>🏆 Top Mixologists</h2>
+        <div id="board-tabs">
+          <button id="tab-all" class="tab active">All-time</button>
+          <button id="tab-week" class="tab">This Week</button>
+        </div>
         <ol id="board-list"></ol>
         <button id="board-close" class="btn green">Back</button>
       </div>
