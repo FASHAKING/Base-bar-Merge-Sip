@@ -66,6 +66,7 @@ export function init(state: OnchainState): void {
       } else {
         state.myBest = null;
         state.username = null;
+        state.usernameChecked = false;
         state.badges = null;
         state.supportsBatching = null;
       }
@@ -122,6 +123,8 @@ async function refreshUsername(state: OnchainState): Promise<void> {
     state.username = name || null;
   } catch {
     /* ignore */
+  } finally {
+    state.usernameChecked = true;
   }
 }
 

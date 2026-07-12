@@ -30,6 +30,7 @@ export interface OnchainState {
   myBest: bigint | null;
   supportsBatching: boolean | null; // null = unknown yet
   username: string | null; // claimed leaderboard name
+  usernameChecked: boolean; // onchain usernameOf lookup finished at least once
   nameStatus: TxStatus; // claimUsername transaction state
   nameError: string | null;
   leaderboard: LeaderboardEntry[] | null; // null = not fetched yet
@@ -50,6 +51,7 @@ export const state: OnchainState = {
   myBest: null,
   supportsBatching: null,
   username: null,
+  usernameChecked: false,
   nameStatus: 'idle',
   nameError: null,
   leaderboard: null,

@@ -97,8 +97,8 @@ let claimed = await page.evaluate(() => ({
 }));
 if (!claimed.username) {
   const name = 'sipper_' + Math.floor(Math.random() * 10000);
-  await page.fill('#name-input', name);
-  await page.click('#claim-btn');
+  await page.fill('#username-input', name);
+  await page.click('#register-btn');
   for (let i = 0; i < 20; i++) {
     await page.waitForTimeout(500);
     claimed = await page.evaluate(() => ({
