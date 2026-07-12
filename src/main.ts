@@ -3,6 +3,15 @@ import { initMiniApp } from './base.ts';
 import { initOnchain, state as onchainState } from './onchain.ts';
 import { initUi } from './ui.ts';
 
+// Warm up the display font so canvas text picks it up as soon as it loads
+// (frames render continuously, so late arrival is seamless).
+try {
+  void document.fonts.load("600 16px 'Fredoka'");
+  void document.fonts.load("bold 16px 'Fredoka'");
+} catch {
+  /* font API unavailable — system fallback is fine */
+}
+
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const game = new Game(canvas);
 // for debugging/tests

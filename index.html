@@ -24,7 +24,22 @@
       content='{"version":"1","imageUrl":"https://merge-sip.example.com/hero.png","button":{"title":"🍹 Play Merge Sip","action":{"type":"launch_frame","name":"Merge Sip","url":"https://merge-sip.example.com","splashImageUrl":"https://merge-sip.example.com/splash.png","splashBackgroundColor":"#7ecbe8"}}}'
     />
 
+    <!-- Display font (falls back to system fonts offline) -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+
     <style>
+      :root {
+        --ink: #4a2f14;
+        --ink-soft: #9a7b4f;
+        --cream: #fffaf0;
+        --coral: #e0453a;
+        --gold: #f4b13e;
+      }
       html,
       body {
         margin: 0;
@@ -36,7 +51,7 @@
         -webkit-user-select: none;
         user-select: none;
         -webkit-tap-highlight-color: transparent;
-        font-family: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+        font-family: 'Fredoka', 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
       }
       #game {
         display: block;
@@ -50,70 +65,132 @@
         align-items: center;
         justify-content: center;
         padding: 20px;
-        background: linear-gradient(180deg, rgba(126, 203, 232, 0.92), rgba(247, 226, 176, 0.94));
+        background: linear-gradient(180deg, rgba(60, 140, 185, 0.35), rgba(120, 80, 30, 0.45));
+        backdrop-filter: blur(7px) saturate(1.15);
+        -webkit-backdrop-filter: blur(7px) saturate(1.15);
         z-index: 10;
       }
       .overlay[hidden] {
         display: none;
       }
       .card {
+        position: relative;
         width: min(400px, 92vw);
         max-height: 88vh;
         overflow-y: auto;
-        background: #fff8ec;
-        border: 5px solid #c07d3e;
-        border-radius: 24px;
-        padding: 24px 22px;
-        box-shadow: 0 12px 40px rgba(90, 52, 16, 0.35);
+        overflow-x: hidden;
+        background:
+          radial-gradient(140% 90% at 50% 0%, #fffdf6 0%, #fff6e4 55%, #fdeeD2 100%);
+        border-radius: 26px;
+        padding: 34px 24px 26px;
+        box-shadow:
+          0 30px 60px -12px rgba(60, 30, 5, 0.5),
+          0 8px 20px rgba(60, 30, 5, 0.25),
+          inset 0 1px 0 rgba(255, 255, 255, 0.9);
         display: flex;
         flex-direction: column;
         gap: 12px;
         text-align: center;
+        animation: card-in 0.35s cubic-bezier(0.2, 1.2, 0.4, 1);
+      }
+      @keyframes card-in {
+        from { transform: translateY(18px) scale(0.96); opacity: 0; }
+        to { transform: none; opacity: 1; }
+      }
+      /* striped beach-bar awning across the top of the card */
+      .card::before {
+        content: '';
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 14px;
+        background: repeating-linear-gradient(
+          90deg,
+          #ff6f61 0 26px,
+          #fff3df 26px 52px
+        );
+        border-radius: 26px 26px 0 0;
+      }
+      .card::after {
+        content: '';
+        position: absolute;
+        top: 14px;
+        left: 0;
+        right: 0;
+        height: 6px;
+        background: linear-gradient(180deg, rgba(60, 30, 5, 0.18), transparent);
+        pointer-events: none;
       }
       .card h1 {
-        margin: 0;
-        font-size: 2rem;
-        color: #c0392b;
+        margin: 6px 0 0;
+        font-size: 2.15rem;
+        font-weight: 700;
+        letter-spacing: 0.01em;
+        color: var(--coral);
+        text-shadow: 0 2px 0 rgba(255, 255, 255, 0.8);
       }
       .card h2 {
-        margin: 0;
-        font-size: 1.4rem;
-        color: #c0392b;
+        margin: 6px 0 0;
+        font-size: 1.45rem;
+        font-weight: 600;
+        color: var(--coral);
+        text-shadow: 0 2px 0 rgba(255, 255, 255, 0.8);
       }
       .tagline {
         margin: 0;
-        color: #6b4a22;
+        color: #7d5a2e;
+        font-weight: 400;
+        line-height: 1.35;
       }
       .best-line {
         margin: 0;
-        font-weight: bold;
-        color: #8a6a3a;
+        font-weight: 600;
+        color: var(--ink-soft);
       }
       .btn {
+        position: relative;
         border: none;
         border-radius: 999px;
-        padding: 13px 18px;
-        font: bold 1.05rem 'Trebuchet MS', sans-serif;
+        padding: 14px 18px;
+        font: 600 1.05rem 'Fredoka', 'Trebuchet MS', sans-serif;
+        letter-spacing: 0.02em;
         color: #fff;
         cursor: pointer;
         touch-action: manipulation;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        box-shadow:
+          0 4px 10px rgba(60, 30, 5, 0.25),
+          inset 0 1.5px 0 rgba(255, 255, 255, 0.45),
+          inset 0 -3px 0 rgba(0, 0, 0, 0.16);
+        transition: transform 0.12s ease, filter 0.12s ease, box-shadow 0.12s ease;
       }
-      .btn:active {
-        transform: scale(0.97);
+      .btn:hover:not([disabled]) {
+        filter: brightness(1.06);
+        transform: translateY(-1px);
       }
-      .btn.green { background: #2eb872; }
-      .btn.blue { background: #4f6df5; }
-      .btn.orange { background: #f2811d; }
-      .btn.wood { background: #a8672f; }
+      .btn:active:not([disabled]) {
+        transform: translateY(1px) scale(0.985);
+        box-shadow:
+          0 2px 5px rgba(60, 30, 5, 0.25),
+          inset 0 1.5px 0 rgba(255, 255, 255, 0.35),
+          inset 0 -1px 0 rgba(0, 0, 0, 0.12);
+      }
+      .btn.green { background: linear-gradient(180deg, #43d98a, #1fa25c); }
+      .btn.blue { background: linear-gradient(180deg, #6a86ff, #3d5ef0); }
+      .btn.orange { background: linear-gradient(180deg, #ffa43d, #ef7a10); }
+      .btn.wood { background: linear-gradient(180deg, #bd8146, #925c26); }
       .btn[disabled] {
-        opacity: 0.6;
+        opacity: 0.45;
+        filter: saturate(0.4);
         cursor: default;
+        box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.1);
       }
       #wallet-section {
         display: flex;
         flex-direction: column;
         gap: 10px;
-        border-top: 2px dashed #e2c9a0;
+        border-top: 2px dashed #ecd3a7;
         padding-top: 14px;
       }
       #wallet-section[hidden] { display: none; }
@@ -130,20 +207,29 @@
       #register-row input {
         flex: 1;
         min-width: 0;
-        border: 2px solid #c07d3e;
-        border-radius: 12px;
-        padding: 10px 12px;
-        font: 1rem 'Trebuchet MS', sans-serif;
-        color: #5a3410;
-        background: #fffdf8;
+        border: 2px solid #ecd3a7;
+        border-radius: 999px;
+        padding: 12px 18px;
+        font: 500 1rem 'Fredoka', 'Trebuchet MS', sans-serif;
+        color: var(--ink);
+        background: #fffdf9;
+        box-shadow: inset 0 2px 4px rgba(60, 30, 5, 0.07);
+        transition: border-color 0.15s ease, box-shadow 0.15s ease;
+      }
+      #register-row input::placeholder {
+        color: #c8ab7e;
       }
       #register-row input:focus {
-        outline: 3px solid rgba(242, 129, 29, 0.4);
+        outline: none;
+        border-color: var(--gold);
+        box-shadow:
+          inset 0 2px 4px rgba(60, 30, 5, 0.07),
+          0 0 0 4px rgba(244, 177, 62, 0.25);
       }
       #username-line {
         margin: 0;
-        font-weight: bold;
-        color: #2eb872;
+        font-weight: 600;
+        color: #1fa25c;
         cursor: pointer;
       }
       #challenge-line {
@@ -159,16 +245,18 @@
         margin: 0;
         min-height: 1.1em;
         font-size: 0.85rem;
-        color: #8a6a3a;
+        font-weight: 500;
+        color: var(--ink-soft);
       }
-      .status.error { color: #c0392b; }
+      .status.error { color: var(--coral); }
       #badge-row[hidden] { display: none; }
       .badge-title {
         margin: 0 0 4px;
-        font-size: 0.8rem;
-        letter-spacing: 0.06em;
+        font-size: 0.72rem;
+        font-weight: 600;
+        letter-spacing: 0.12em;
         text-transform: uppercase;
-        color: #8a6a3a;
+        color: var(--ink-soft);
       }
       #badge-icons {
         display: flex;
@@ -178,9 +266,10 @@
       #badge-icons canvas {
         width: 44px;
         height: 44px;
+        filter: drop-shadow(0 2px 3px rgba(60, 30, 5, 0.25));
       }
       #badge-icons canvas.locked {
-        opacity: 0.25;
+        opacity: 0.22;
         filter: grayscale(1);
       }
       #board-tabs {
@@ -189,19 +278,22 @@
         justify-content: center;
       }
       .tab {
-        border: 2px solid #c07d3e;
+        border: 2px solid #ecd3a7;
         border-radius: 999px;
-        padding: 7px 16px;
-        font: bold 0.9rem 'Trebuchet MS', sans-serif;
-        color: #8a6a3a;
-        background: #fffdf8;
+        padding: 8px 18px;
+        font: 600 0.9rem 'Fredoka', 'Trebuchet MS', sans-serif;
+        color: var(--ink-soft);
+        background: #fffdf9;
         cursor: pointer;
         touch-action: manipulation;
+        transition: all 0.15s ease;
       }
       .tab.active {
-        background: #f2811d;
-        border-color: #f2811d;
+        background: linear-gradient(180deg, #ffa43d, #ef7a10);
+        border-color: transparent;
         color: #fff;
+        text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        box-shadow: 0 3px 8px rgba(239, 122, 16, 0.35);
       }
       #board-list {
         margin: 0;
@@ -216,30 +308,38 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        background: #fff2dc;
-        border-radius: 12px;
-        padding: 8px 12px;
-        color: #5a3410;
+        background: linear-gradient(180deg, #fffdf6, #fdf2da);
+        border: 1px solid rgba(236, 211, 167, 0.8);
+        border-radius: 14px;
+        padding: 9px 14px;
+        color: var(--ink);
+        box-shadow: 0 1px 3px rgba(60, 30, 5, 0.08);
+      }
+      #board-list li:first-child {
+        background: linear-gradient(180deg, #fff8dc, #ffedb8);
+        border-color: #f2cd7c;
+        box-shadow: 0 2px 8px rgba(244, 177, 62, 0.3);
       }
       #board-list .rank {
-        font-weight: bold;
-        width: 1.6em;
-        color: #c0392b;
+        font-weight: 700;
+        width: 1.7em;
+        color: var(--coral);
       }
       #board-list .who {
         flex: 1;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-        font-weight: bold;
+        font-weight: 600;
       }
       #board-list .pts {
         font-variant-numeric: tabular-nums;
-        font-weight: bold;
+        font-weight: 700;
+        color: #7d5a2e;
       }
       #board-list .empty {
         justify-content: center;
-        color: #8a6a3a;
+        color: var(--ink-soft);
       }
     </style>
   </head>

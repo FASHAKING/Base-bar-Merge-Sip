@@ -66,6 +66,9 @@ interface Rect {
 
 type State = 'aim' | 'settle' | 'over';
 
+// Display font for all canvas text (webfont with system fallback).
+const FONT = "'Fredoka', 'Trebuchet MS', sans-serif";
+
 const SPAWN_WEIGHTS = [28, 24, 18, 13, 9]; // tiers 0..4, always available
 const BEST_KEY = 'merge-sip-best';
 // Widest the stage may get relative to window height (phone-portrait feel).
@@ -677,7 +680,7 @@ export class Game {
     // floating texts
     for (const f of this.floats) {
       ctx.globalAlpha = Math.min(1, f.life);
-      ctx.font = `bold ${Math.max(16, this.W * 0.045)}px 'Trebuchet MS', sans-serif`;
+      ctx.font = `bold ${Math.max(16, this.W * 0.045)}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.lineWidth = 4;
       ctx.strokeStyle = 'rgba(0,0,0,0.35)';
@@ -691,18 +694,34 @@ export class Game {
     this.drawChain(ctx);
     if (this.state === 'over') this.drawGameOver(ctx);
     ctx.restore();
+
+    // gentle vignette pulls the eye to the middle of the scene
+    const v = ctx.createRadialGradient(
+      this.fullW / 2,
+      this.H * 0.45,
+      Math.min(this.fullW, this.H) * 0.45,
+      this.fullW / 2,
+      this.H * 0.45,
+      Math.max(this.fullW, this.H) * 0.75,
+    );
+    v.addColorStop(0, 'rgba(70, 40, 10, 0)');
+    v.addColorStop(1, 'rgba(70, 40, 10, 0.14)');
+    ctx.fillStyle = v;
+    ctx.fillRect(0, 0, this.fullW, this.H);
   }
 
   private drawBackground(ctx: CanvasRenderingContext2D): void {
     const { fullW, H } = this;
     // covers the whole window, including the letterbox gutters on wide screens
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#7ecbe8');
-    g.addColorStop(0.3, '#a8e0f2');
-    g.addColorStop(0.42, '#cfeef8');
-    g.addColorStop(0.46, '#3f9fd4');
-    g.addColorStop(0.52, '#f7e2b0');
-    g.addColorStop(1, '#eccf8f');
+    g.addColorStop(0, '#6cc4ea');
+    g.addColorStop(0.28, '#a5e1f5');
+    g.addColorStop(0.42, '#dbf2fa');
+    g.addColorStop(0.455, '#2e8fc7');
+    g.addColorStop(0.5, '#57b3de');
+    g.addColorStop(0.515, '#fdf3d5');
+    g.addColorStop(0.55, '#f7e2b0');
+    g.addColorStop(1, '#e8ca86');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, fullW, H);
 
@@ -951,7 +970,7 @@ export class Game {
     if (this.launches === 0) {
       const cx = this.inner.x + this.inner.w / 2;
       const y = this.lineY + (this.launchY - this.lineY) * 0.1;
-      ctx.font = `bold ${Math.max(15, this.W * 0.042)}px 'Trebuchet MS', sans-serif`;
+      ctx.font = `bold ${Math.max(15, this.W * 0.042)}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.lineWidth = 4;
       ctx.strokeStyle = 'rgba(0,0,0,0.3)';
@@ -968,7 +987,7 @@ export class Game {
 
     // score pill (top-left)
     const scoreTxt = this.score.toLocaleString();
-    ctx.font = `bold ${pillH * 0.52}px 'Trebuchet MS', sans-serif`;
+    ctx.font = `bold ${pillH * 0.52}px ${FONT}`;
     const tw = ctx.measureText(scoreTxt).width;
     const pillW = tw + pillH * 1.6;
     ctx.save();
@@ -979,9 +998,23 @@ export class Game {
     ctx.fillStyle = 'rgba(80, 45, 15, 0.75)';
     ctx.fill();
     ctx.restore();
+    const coinX = pad + pillH * 0.55;
+    const coinY = topY + pillH / 2;
+    const coinR = pillH * 0.33;
     ctx.beginPath();
-    ctx.arc(pad + pillH * 0.55, topY + pillH / 2, pillH * 0.33, 0, Math.PI * 2);
-    ctx.fillStyle = '#ffd54f';
+    ctx.arc(coinX, coinY, coinR, 0, Math.PI * 2);
+    const coin = ctx.createRadialGradient(
+      coinX - coinR * 0.35,
+      coinY - coinR * 0.35,
+      coinR * 0.15,
+      coinX,
+      coinY,
+      coinR,
+    );
+    coin.addColorStop(0, '#fff3b0');
+    coin.addColorStop(0.6, '#ffd54f');
+    coin.addColorStop(1, '#e8a825');
+    ctx.fillStyle = coin;
     ctx.fill();
     ctx.strokeStyle = '#c99b1f';
     ctx.lineWidth = 2;
@@ -995,7 +1028,7 @@ export class Game {
     const bestVal = Math.max(this.best, Number(onchain.state.myBest ?? 0n));
     const bestY = topY + pillH + 9;
     const bestMaxW = Math.max(70, this.W / 2 - Math.min(this.W * 0.4, 190) / 2 - pad - 8);
-    ctx.font = `bold ${pillH * 0.38}px 'Trebuchet MS', sans-serif`;
+    ctx.font = `bold ${pillH * 0.38}px ${FONT}`;
     ctx.fillStyle =
       this.score > bestVal && bestVal > 0 ? '#2eb872' : 'rgba(90, 52, 16, 0.9)';
     ctx.fillText(
@@ -1019,7 +1052,7 @@ export class Game {
         : oc.status === 'connecting'
           ? 'Connecting…'
           : 'Connect';
-      ctx.font = `bold ${wh * 0.48}px 'Trebuchet MS', sans-serif`;
+      ctx.font = `bold ${wh * 0.48}px ${FONT}`;
       const ww = ctx.measureText(label).width + wh * 1.3;
       this.btnWallet = { x: pad, y: wy, w: ww, h: wh };
       roundRect(ctx, pad, wy, ww, wh, wh / 2);
@@ -1033,7 +1066,7 @@ export class Game {
       ctx.fillText(label, pad + wh * 0.9, wy + wh / 2 + 1);
 
       if (oc.totalServed !== null) {
-        ctx.font = `${wh * 0.44}px 'Trebuchet MS', sans-serif`;
+        ctx.font = `${wh * 0.44}px ${FONT}`;
         ctx.fillStyle = 'rgba(90, 52, 16, 0.85)';
         ctx.fillText(
           `🍹 ${oc.totalServed.toLocaleString()} served`,
@@ -1062,7 +1095,7 @@ export class Game {
     ctx.strokeStyle = '#e8b04a';
     ctx.stroke();
     if (this.state !== 'over') this.drawPiece(ctx, this.nextTier, nx, ny, nr * 0.55);
-    ctx.font = `bold ${pillH * 0.36}px 'Trebuchet MS', sans-serif`;
+    ctx.font = `bold ${pillH * 0.36}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.fillStyle = '#5a3410';
     ctx.fillText('NEXT', nx, ny + nr + pillH * 0.28);
@@ -1085,11 +1118,11 @@ export class Game {
     ctx.strokeStyle = '#e2984a';
     ctx.stroke();
     ctx.textAlign = 'center';
-    ctx.font = `bold ${pillH * 0.32}px 'Trebuchet MS', sans-serif`;
+    ctx.font = `bold ${pillH * 0.32}px ${FONT}`;
     ctx.fillStyle = '#c0392b';
     ctx.fillText('TO-GO ORDER', this.W / 2, ocY + ocH * 0.24);
     drawDrink(ctx, this.orderTier, ocX + ocW * 0.16, ocY + ocH * 0.66, ocH * 0.24);
-    ctx.font = `${pillH * 0.3}px 'Trebuchet MS', sans-serif`;
+    ctx.font = `${pillH * 0.3}px ${FONT}`;
     ctx.fillStyle = '#6b4a22';
     ctx.fillText(
       DRINKS[this.orderTier].name,
@@ -1100,7 +1133,7 @@ export class Game {
 
     // mode/challenge tags floating at the top of the sand
     let tagY = this.inner.y + pillH * 0.55;
-    ctx.font = `bold ${pillH * 0.32}px 'Trebuchet MS', sans-serif`;
+    ctx.font = `bold ${pillH * 0.32}px ${FONT}`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     if (this.mode === 'daily') {
@@ -1130,9 +1163,16 @@ export class Game {
     ctx.shadowBlur = 10;
     ctx.shadowOffsetY = 4;
     roundRect(ctx, 8, y, this.W - 16, barH, barH / 2);
-    ctx.fillStyle = 'rgba(122, 74, 33, 0.85)';
+    const barG = ctx.createLinearGradient(0, y, 0, y + barH);
+    barG.addColorStop(0, 'rgba(146, 92, 44, 0.92)');
+    barG.addColorStop(1, 'rgba(104, 61, 25, 0.92)');
+    ctx.fillStyle = barG;
     ctx.fill();
     ctx.restore();
+    roundRect(ctx, 8, y, this.W - 16, barH, barH / 2);
+    ctx.strokeStyle = 'rgba(255, 226, 180, 0.25)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
 
     const n = DRINKS.length;
     const cell = (this.W - 32) / n;
@@ -1178,12 +1218,28 @@ export class Game {
     ctx.shadowBlur = 24;
     ctx.shadowOffsetY = 10;
     roundRect(ctx, px, py, pw, ph, 22);
-    ctx.fillStyle = '#fff8ec';
+    const panel = ctx.createLinearGradient(0, py, 0, py + ph);
+    panel.addColorStop(0, '#fffdf6');
+    panel.addColorStop(0.6, '#fff4e0');
+    panel.addColorStop(1, '#fdeccd');
+    ctx.fillStyle = panel;
     ctx.fill();
     ctx.restore();
-    ctx.lineWidth = 5;
-    ctx.strokeStyle = '#c07d3e';
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = 'rgba(224, 160, 91, 0.7)';
     ctx.stroke();
+    // awning stripes along the panel top
+    ctx.save();
+    roundRect(ctx, px, py, pw, ph, 22);
+    ctx.clip();
+    const stripeW = pw / 9;
+    for (let i = 0; i < 9; i++) {
+      ctx.fillStyle = i % 2 ? '#fff3df' : '#ff6f61';
+      ctx.fillRect(px + i * stripeW, py, stripeW + 1, 12);
+    }
+    ctx.fillStyle = 'rgba(60, 30, 5, 0.12)';
+    ctx.fillRect(px, py + 12, pw, 4);
+    ctx.restore();
 
     const oc = onchain.state;
     // upper section compresses when the onchain rows are present
@@ -1193,17 +1249,17 @@ export class Game {
 
     ctx.textAlign = 'center';
     ctx.fillStyle = '#c0392b';
-    ctx.font = `bold ${pw * 0.09}px 'Trebuchet MS', sans-serif`;
+    ctx.font = `bold ${pw * 0.09}px ${FONT}`;
     ctx.fillText('Bar is backed up!', this.W / 2, py + ph * f.title);
 
     drawDrink(ctx, this.maxTierMade, this.W / 2, py + ph * f.drink, pw * f.drinkR);
 
     ctx.fillStyle = '#5a3410';
-    ctx.font = `${pw * 0.055}px 'Trebuchet MS', sans-serif`;
+    ctx.font = `${pw * 0.055}px ${FONT}`;
     ctx.fillText(`Best drink: ${DRINKS[this.maxTierMade].name}`, this.W / 2, py + ph * f.bestDrink);
-    ctx.font = `bold ${pw * 0.085}px 'Trebuchet MS', sans-serif`;
+    ctx.font = `bold ${pw * 0.085}px ${FONT}`;
     ctx.fillText(`Score: ${this.score.toLocaleString()}`, this.W / 2, py + ph * f.score);
-    ctx.font = `${pw * 0.05}px 'Trebuchet MS', sans-serif`;
+    ctx.font = `${pw * 0.05}px ${FONT}`;
     ctx.fillStyle = '#8a6a3a';
     ctx.fillText(`Best: ${this.best.toLocaleString()}`, this.W / 2, py + ph * f.best);
 
@@ -1212,7 +1268,7 @@ export class Game {
     if (this.challenge) {
       const beaten = this.score > this.challenge.score;
       ctx.fillStyle = beaten ? '#2eb872' : '#c0392b';
-      ctx.font = `bold ${pw * 0.048}px 'Trebuchet MS', sans-serif`;
+      ctx.font = `bold ${pw * 0.048}px ${FONT}`;
       ctx.fillText(
         beaten
           ? `🏆 You beat @${this.challenge.by}!`
@@ -1222,7 +1278,7 @@ export class Game {
       );
     } else if (this.mode === 'daily') {
       ctx.fillStyle = '#e8801a';
-      ctx.font = `bold ${pw * 0.048}px 'Trebuchet MS', sans-serif`;
+      ctx.font = `bold ${pw * 0.048}px ${FONT}`;
       ctx.fillText(
         `🌞 Daily Mix #${dailyNumber()} — today's best: ${getDailyBest().toLocaleString()}`,
         this.W / 2,
@@ -1303,7 +1359,7 @@ export class Game {
           }
         }
       }
-      ctx.font = `${serveTappable ? 'bold ' : ''}${pw * 0.042}px 'Trebuchet MS', sans-serif`;
+      ctx.font = `${serveTappable ? 'bold ' : ''}${pw * 0.042}px ${FONT}`;
       ctx.textAlign = 'center';
       ctx.fillStyle = serveColor;
       ctx.fillText(serveText, this.W / 2, by + pw * 0.035);
@@ -1317,7 +1373,7 @@ export class Game {
       by += pw * 0.1;
 
       // leaderboard link
-      ctx.font = `bold ${pw * 0.05}px 'Trebuchet MS', sans-serif`;
+      ctx.font = `bold ${pw * 0.05}px ${FONT}`;
       ctx.fillStyle = '#4f6df5';
       ctx.fillText('🏆 View Leaderboard', this.W / 2, by + pw * 0.05);
       const lbW = pw * 0.6;
@@ -1393,12 +1449,36 @@ function roundRect(
   ctx.closePath();
 }
 
+/** Shift a #rrggbb color toward white (amt > 0) or black (amt < 0). */
+function shade(hex: string, amt: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const ch = (v: number): number =>
+    Math.round(amt >= 0 ? v + (255 - v) * amt : v * (1 + amt));
+  const r = ch((n >> 16) & 255);
+  const g = ch((n >> 8) & 255);
+  const b = ch(n & 255);
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
 function button(ctx: CanvasRenderingContext2D, r: Rect, color: string, label: string): void {
+  ctx.save();
+  ctx.shadowColor = 'rgba(60, 30, 5, 0.3)';
+  ctx.shadowBlur = 8;
+  ctx.shadowOffsetY = 3;
   roundRect(ctx, r.x, r.y, r.w, r.h, r.h / 2);
-  ctx.fillStyle = color;
+  const g = ctx.createLinearGradient(0, r.y, 0, r.y + r.h);
+  g.addColorStop(0, shade(color, 0.22));
+  g.addColorStop(1, shade(color, -0.12));
+  ctx.fillStyle = g;
   ctx.fill();
+  ctx.restore();
+  // top highlight
+  roundRect(ctx, r.x, r.y, r.w, r.h, r.h / 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
   ctx.fillStyle = '#ffffff';
-  ctx.font = `bold ${r.h * 0.42}px 'Trebuchet MS', sans-serif`;
+  ctx.font = `600 ${r.h * 0.42}px ${FONT}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   ctx.fillText(label, r.x + r.w / 2, r.y + r.h / 2 + 1);

@@ -5,6 +5,8 @@ import { DRINKS, drawDrink } from './drinks.ts';
 import { APP_URL, openExternal } from './base.ts';
 import { challengeUrl } from './modes.ts';
 
+const FONT = "'Fredoka', 'Trebuchet MS', sans-serif";
+
 /** Render a 1000x1000 score card PNG blob. */
 export async function renderScoreCard(
   score: number,
@@ -40,25 +42,25 @@ export async function renderScoreCard(
 
   ctx.textAlign = 'center';
   ctx.fillStyle = '#c0392b';
-  ctx.font = "bold 78px 'Trebuchet MS', sans-serif";
+  ctx.font = `bold 78px ${FONT}`;
   ctx.fillText('MERGE SIP', size / 2, 215);
 
   ctx.fillStyle = '#8a6a3a';
-  ctx.font = "44px 'Trebuchet MS', sans-serif";
+  ctx.font = `44px ${FONT}`;
   ctx.fillText(username ? `@${username}` : 'anonymous mixologist', size / 2, 285);
 
   drawDrink(ctx, tier, size / 2, 470, 130);
 
   ctx.fillStyle = '#5a3410';
-  ctx.font = "bold 110px 'Trebuchet MS', sans-serif";
+  ctx.font = `bold 110px ${FONT}`;
   ctx.fillText(score.toLocaleString(), size / 2, 730);
 
   ctx.fillStyle = '#6b4a22';
-  ctx.font = "44px 'Trebuchet MS', sans-serif";
+  ctx.font = `44px ${FONT}`;
   ctx.fillText(`Best drink: ${DRINKS[tier].name}`, size / 2, 800);
 
   ctx.fillStyle = '#8a6a3a';
-  ctx.font = "34px 'Trebuchet MS', sans-serif";
+  ctx.font = `34px ${FONT}`;
   ctx.fillText('Served on Base 🔵 — come out-pour me!', size / 2, 862);
 
   return new Promise((resolve, reject) => {
