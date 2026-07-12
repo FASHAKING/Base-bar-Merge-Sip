@@ -183,7 +183,9 @@ function renderGate(): void {
   // ---- onchain gate ----
   connectBtn.hidden = false;
   if (s.address) {
-    connectBtn.textContent = `Connected: ${s.address.slice(0, 6)}…${s.address.slice(-4)} (tap to disconnect)`;
+    // prefer the Basename when the wallet has one
+    const who = s.basename ?? `${s.address.slice(0, 6)}…${s.address.slice(-4)}`;
+    connectBtn.textContent = `Connected: ${who} (tap to disconnect)`;
   } else {
     connectBtn.textContent = s.status === 'connecting' ? 'Connecting…' : '🔵 Connect Wallet';
   }

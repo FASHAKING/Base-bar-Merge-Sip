@@ -28,7 +28,7 @@ import {
 } from '@wagmi/core/experimental';
 import { baseAccount } from '@wagmi/connectors';
 import { farcasterMiniApp } from '@farcaster/miniapp-wagmi-connector';
-import { encodeFunctionData, parseAbiItem } from 'viem';
+import { encodeFunctionData, parseAbiItem, keccak256, namehash, encodePacked, stringToBytes } from 'viem';
 import { base, baseSepolia } from '@wagmi/core/chains';
 import {
   TALLY_ADDRESS,
@@ -62,12 +62,14 @@ export function init(state: OnchainState): void {
         void refreshMyBest(state);
         void refreshUsername(state);
         void refreshBadges(state);
+        void refreshBasename(state);
         void detectCapabilities(state);
       } else {
         state.myBest = null;
         state.username = null;
         state.usernameChecked = false;
         state.badges = null;
+        state.basename = null;
         state.supportsBatching = null;
       }
     },
@@ -75,6 +77,44 @@ export function init(state: OnchainState): void {
   void refreshTally(state);
   void refreshLeaderboard(state);
   setInterval(() => void refreshTally(state), 45_000);
+}
+
+// ---------------------------------------------------------------- basenames
+//
+// Basenames (Base's ENS names) resolve via reverse records on Base mainnet's
+// L2Resolver. ENSIP-19: node = keccak(reverseNamespaceNode ‖ labelhash(addr)),
+// where the namespace is "<coinType-hex>.reverse" and Base's coinType is
+// 0x80000000 | 8453 = 0x80002105.
+
+const BASENAME_L2_RESOLVER = '0xC6d566A56A1aFf6508b41f6c90ff131615583BCD';
+const BASE_REVERSE_NODE = namehash('80002105.reverse');
+
+/** Resolve the connected wallet's Basename (e.g. "alice.base.eth"), if any. */
+async function refreshBasename(state: OnchainState): Promise<void> {
+  const addr = state.address;
+  if (!addr) return;
+  try {
+    const label = keccak256(stringToBytes(addr.toLowerCase().slice(2)));
+    const node = keccak256(encodePacked(['bytes32', 'bytes32'], [BASE_REVERSE_NODE, label]));
+    const name = await readContract(config, {
+      address: BASENAME_L2_RESOLVER,
+      abi: [
+        {
+          type: 'function',
+          name: 'name',
+          inputs: [{ name: 'node', type: 'bytes32' }],
+          outputs: [{ name: '', type: 'string' }],
+          stateMutability: 'view',
+        },
+      ] as const,
+      functionName: 'name',
+      args: [node],
+      chainId: base.id,
+    });
+    state.basename = name || null;
+  } catch {
+    state.basename = null; // no basename / non-mainnet build — show the address
+  }
 }
 
 // ------------------------------------------------------------------- reads

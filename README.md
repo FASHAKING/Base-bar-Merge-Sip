@@ -182,7 +182,7 @@ npm run build   # outputs dist/
    URL, e.g. `https://merge-sip.vercel.app`.
 
 2. **Point the app at your URL.** Replace every occurrence of
-   `https://merge-sip.example.com` with your production URL in:
+   `https://mergesip.xyz` with your production URL in:
    - `public/.well-known/farcaster.json` (homeUrl, iconUrl, splashImageUrl, heroImageUrl, ogImageUrl)
    - `index.html` (the `fc:miniapp` / `fc:frame` meta tags)
    - `src/base.ts` (`APP_URL`)

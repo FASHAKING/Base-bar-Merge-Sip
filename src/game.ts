@@ -1048,7 +1048,7 @@ export class Game {
       const wh = pillH * 0.76;
       const wy = bestY + pillH * 0.32;
       const label = oc.address
-        ? `${oc.address.slice(0, 5)}…${oc.address.slice(-3)}`
+        ? (oc.basename ?? `${oc.address.slice(0, 5)}…${oc.address.slice(-3)}`)
         : oc.status === 'connecting'
           ? 'Connecting…'
           : 'Connect';

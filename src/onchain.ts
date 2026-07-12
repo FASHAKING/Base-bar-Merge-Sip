@@ -24,6 +24,7 @@ export interface LeaderboardEntry {
 export interface OnchainState {
   enabled: boolean;
   address: `0x${string}` | null;
+  basename: string | null; // Basename of the connected address (reverse lookup)
   status: TxStatus;
   error: string | null;
   totalServed: bigint | null;
@@ -45,6 +46,7 @@ export interface OnchainState {
 export const state: OnchainState = {
   enabled: tallyEnabled,
   address: null,
+  basename: null,
   status: 'idle',
   error: null,
   totalServed: null,
