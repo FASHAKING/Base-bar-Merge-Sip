@@ -13,7 +13,7 @@
 import { base, baseSepolia } from '@wagmi/core/chains';
 
 const ADDRESSES = {
-  base: '0x005D46A883c545ba2d95519386D8D58BFF0B4FA7',
+  base: '0x34d43D6570664919a17071C17acb3A7e48A0A762',
   'base-sepolia': '0x0000000000000000000000000000000000000000',
 } as const;
 
