@@ -1,108 +1,171 @@
 # Merge Sip 🍹
 
-A beach-bar **shuffleboard merge game** built as a **Base Mini App**.
+**Play now → [mergesip.xyz](https://mergesip.xyz)** · live as a **Base Mini App** · contract on **[Base mainnet](https://basescan.org/address/0x34d43D6570664919a17071C17acb3A7e48A0A762)**
 
-Flick tropical drinks up the sandy board. When two identical drinks collide they
-merge into the next, fancier cocktail — chase the 10-tier chain all the way to
-the **Legendary Tiki**. Serve to-go orders for bonus coins, and don't let the
-bar back up past the dashed line!
+A beach-bar **shuffleboard merge game**. Flick tropical drinks up the sandy
+board — when two identical drinks collide they merge into the next, fancier
+cocktail. Chase the 10-tier chain all the way to the **Legendary Tiki**, serve
+to-go orders for bonus coins, and don't let the bar back up past the dashed
+line!
 
 | Gameplay | Game over |
 | --- | --- |
 | ![Gameplay](docs/screenshot-gameplay.png) | ![Game over](docs/screenshot-gameover.png) |
 
+## Where to play
+
+- **Base App** — share or open [mergesip.xyz](https://mergesip.xyz) inside
+  Base App and it launches as a mini app (in-app wallet, haptics, cast
+  sharing). Verified manifest, indexed in the mini-app catalog.
+- **Any browser** — [mergesip.xyz](https://mergesip.xyz) works on desktop and
+  mobile with an injected wallet (MetaMask) or Base Account.
+- **Onchain** — usernames, scores, badges, and score-card NFTs live in the
+  [`DrinkTally`](contracts/src/DrinkTally.sol) contract at
+  [`0x34d4…A762`](https://basescan.org/address/0x34d43D6570664919a17071C17acb3A7e48A0A762)
+  on Base mainnet.
+
+## Getting started (2 minutes)
+
+1. **Open [mergesip.xyz](https://mergesip.xyz)** (in Base App or a browser).
+2. **Connect your wallet** — Base App's in-app wallet connects with one tap;
+   in a browser you can use MetaMask or Base Account. If your address has a
+   **Basename**, the game shows it instead of `0x…`.
+3. **Register your username** — pick a 3-16 character handle (a-z, 0-9, _).
+   Hitting **Register** mints it onchain via `claimUsername` (you pay a tiny
+   bit of Base gas). Usernames are globally unique and appear on the
+   leaderboard, your score cards, and your shares. Returning players skip
+   straight past this — the game recognizes your claimed name.
+4. **Start Mixing** — or take on today's **Daily Mix**.
+
 ## How to play
 
-- **Touch and drag** left/right to position your drink, **release** to send it sliding up the board.
-- Drinks glide on the sand with friction and bounce off the walls and each other.
-- Two matching drinks that touch **merge** into the next tier (+points).
-- **Combos** — chain merges within ~2 seconds and the points multiply (up to ×5).
-- **Wildcard shaker** — a rare silver shaker that merges with *any* drink (unlocks
-  after your first Pink Punch).
-- Complete the **To-Go Order** shown at the top for a coin bonus — and the
-  barback clears the three smallest drinks off the crowded board.
-- If a drink comes to rest **below the dashed line**, the bar is backed up — game over.
-- **Daily Mix** — one seeded run per day, the same drink sequence for every
-  player worldwide; your daily best is tracked separately.
-- **Streaks** — play at least once a day to grow your 🔥 streak (shown on the intro).
-- **Challenge links** — shared scores embed a `?c=<score>&by=<name>` link;
-  friends who open it see a "beat @name" target in-game.
-- Share your score straight to the feed with the **Share** button (opens the cast composer inside Base App).
+**Controls:** touch (or click) and drag left/right to aim, release to send the
+drink sliding up the board. Drinks glide on sand friction and bounce off the
+walls and each other.
 
-## Onchain: the Drink Tally
+**Merging:** two matching drinks that touch merge into the next tier and score
+points. The full chain:
 
-The game has an optional onchain layer built with **wagmi + viem** following the
-[Build an app on Base](https://docs.base.org/get-started/build-app) guide:
+| Tier | Drink | Merge points |
+|-----:|-------|-------------:|
+| 1 | Cola Pop | — (starter) |
+| 2 | Lemon Fizz | 20 |
+| 3 | Lime Cooler | 40 |
+| 4 | Pink Punch | 80 |
+| 5 | Orange Sunrise | 150 |
+| 6 | Blueberry Breeze | 250 |
+| 7 | Mojito Royale | 400 |
+| 8 | Berry Colada | 650 |
+| 9 | Sunset Slush | 1,000 |
+| 10 | **Legendary Tiki** | **2,000** |
 
-- **`contracts/src/DrinkTally.sol`** — the game's onchain hub: unique
-  usernames (`claimUsername`, 3-16 chars a-z/0-9/_), a global `totalServed`
-  tally, per-player `bestScore` / `bestTier`, and a top-10 leaderboard
-  maintained onchain (`getLeaderboard`). Players pay their own gas — there is
-  deliberately no gas sponsorship.
-- **Intro screen** — when the contract is live, the game is fully wallet-gated:
-  connect a wallet first, then register a username (3-16 chars a-z/0-9/_) —
-  the Register button sends the `claimUsername` transaction, and nothing is
-  playable until the name is minted onchain. Returning players who already
-  claimed skip straight to play. Without a deployed contract the username is
-  stored locally (`merge-sip-username`) and the game works offchain. The
-  intro also shows your personal best, streak, milestone badges, and the
-  leaderboard.
-- **Auto-save new bests** — when a connected player finishes a run that beats
-  their onchain best, the `serveScore` transaction starts automatically (the
-  wallet still asks for the signature); no button hunting.
-- **Milestone badges** — the first time a player ever mixes each tier-6+
-  drink, `serveScore` awards a badge (onchain bitmask + event), shown lit/dim
-  on the intro screen.
-- **Score-card NFTs** — `mintScoreCard()` mints the player's best run as an
-  ERC-721 whose artwork is an SVG generated entirely by the contract
-  (`tokenURI` returns base64 JSON + SVG; no IPFS, no servers).
-- **Leaderboard** — top mixologists by best score with their claimed names,
-  reachable from the intro and the game-over screen. An extra **This Week** tab
-  is rebuilt client-side from `ScoreServed` events (chunked `eth_getLogs` with
-  a localStorage cache), since the contract only stores the all-time top 10.
-- **Personal best in the HUD** — always visible under your score, switching to
-  "New best!" the moment you pass it.
-- **Social sharing** — Recast opens the Farcaster cast composer; Share on 𝕏
-  renders a score-card PNG client-side and shares it via the native share
-  sheet (or downloads it and opens a prefilled tweet on desktop).
+**Game over:** if any drink comes to rest **below the dashed line**, the bar
+is backed up and the shift ends. The line pulses red when the pile gets close.
 
-Contract dependencies: `@openzeppelin/contracts@4.9` (ERC-721, Base64,
-Strings), compiled for the `paris` EVM so local ganache testing works.
-- **Wallet connection** — Base App in-app wallet (Farcaster mini app connector),
-  [Base Account](https://docs.base.org/base-account/overview/what-is-base-account),
-  and injected wallets (MetaMask), with auto-reconnect (`src/wallet.ts`).
-- **Reads** — the global tally is shown in the HUD, your onchain best on the
-  game-over screen (`readContract`, refreshed after each write).
-- **Writes** — "Serve Score Onchain" on the game-over screen records your run
-  (`serveScore(score, tier)`), with connect → switch-chain → sign → confirm
-  states surfaced on the button.
-- **EIP-5792** — wallet capabilities are detected per deployment chain
-  (`getCapabilities`); smart wallets submit via atomic `sendCalls`, EOAs fall
-  back to a plain `writeContract` transaction.
-- The wagmi/viem bundle is **lazy-loaded** (`src/onchain.ts` facade) so the game
-  paints instantly and `sdk.actions.ready()` isn't delayed.
+### Mechanics to master
 
-### Networks: mainnet for production, testnet for testing
+- **Combos ×5** — merges chained within ~2 seconds multiply their points, up
+  to ×5. Set up multi-merge shots for huge scores.
+- **Wildcard shaker 🍸** — a rare silver shaker (unlocks after your first
+  Pink Punch) that merges with *any* drink below the Tiki. Save it for your
+  biggest glass.
+- **To-Go Orders** — deliver the drink shown on the order card for a 2×
+  points bonus, and the barback clears the three smallest drinks off the
+  board — your pressure-release valve.
+- **The dealer gets meaner** — as you mix higher tiers, bigger drinks start
+  appearing in your hand and crowd the board.
 
-The app is **mainnet-first**: it targets Base mainnet unless told otherwise.
+### Daily & social
+
+- **🌞 Daily Mix** — one seeded challenge per day: every player worldwide
+  gets the *same* drink sequence. Your daily best is tracked separately.
+- **🔥 Streaks** — play at least once a day and your streak grows (shown on
+  the intro screen).
+- **🎯 Challenge links** — every shared score embeds a challenge. Friends who
+  open your link see "beat @you: 1,234" as a live target in their game, and
+  the game-over screen declares the winner.
+- **Sharing** — *Recast* opens the cast composer inside Base App; *Share on 𝕏*
+  renders your score card as a PNG client-side and opens the native share
+  sheet (or downloads it + a prefilled tweet on desktop).
+
+### Onchain rewards
+
+- **Auto-saved bests** — beat your onchain best and the game starts the
+  `serveScore` transaction automatically (your wallet still asks you to sign).
+- **Milestone badges** — the first time you ever mix each tier-6+ drink you
+  earn a badge, stored onchain as a bitmask and shown on the intro screen.
+- **Score-card NFTs** — mint your best run as an ERC-721 (`SIPCARD`) whose
+  artwork is an SVG generated *entirely by the contract* — no IPFS, no
+  servers.
+- **Leaderboards** — the all-time top 10 is maintained onchain; a **This
+  Week** tab is rebuilt client-side from `ScoreServed` events.
+
+## Under the hood
+
+### The DrinkTally contract
+
+[`contracts/src/DrinkTally.sol`](contracts/src/DrinkTally.sol) — one contract
+(ERC-721 + game logic), deployed at
+[`0x34d43D6570664919a17071C17acb3A7e48A0A762`](https://basescan.org/address/0x34d43D6570664919a17071C17acb3A7e48A0A762):
+
+- `claimUsername(name)` — globally unique handles (3-16 chars a-z/0-9/_),
+  validated onchain; changing your name frees the old one.
+- `serveScore(score, tier)` — records a run: bumps the global `totalServed`,
+  updates your `bestScore`/`bestTier`, awards milestone badges, and re-ranks
+  the onchain top-10 board.
+- `mintScoreCard()` — snapshots your best as a fully-onchain SVG NFT.
+- `getLeaderboard()` — players, scores, tiers, and names in one read.
+
+Players pay their own gas — there is deliberately no sponsorship. Every
+transaction the game sends carries an
+[ERC-8021 builder code](https://docs.base.org) suffix for onchain attribution.
+Contract dependencies: `@openzeppelin/contracts@4.9`, compiled for the `paris`
+EVM so local ganache testing works.
+
+### The client
+
+- [Vite](https://vite.dev) + TypeScript, zero-framework; Canvas 2D rendering
+  with a small custom physics engine (circle collisions, sand friction, flick
+  input).
+- All in-game art is drawn procedurally at runtime (`src/drinks.ts`); sound is
+  a WebAudio synth (`src/sfx.ts`). No image or audio assets in the game loop.
+- [`@farcaster/miniapp-sdk`](https://miniapps.farcaster.xyz) for Base App
+  integration (`sdk.actions.ready()`, `composeCast`, haptics) with graceful
+  fallbacks for plain browsers.
+- `@wagmi/core` + `viem` for the onchain layer, lazy-loaded (`src/onchain.ts`
+  facade) so the game paints instantly. Wallet support: Base App in-app
+  wallet, Base Account, injected (MetaMask), with auto-reconnect and
+  **Basename** reverse resolution for connected addresses.
+- **EIP-5792** capability detection: smart wallets submit batched `sendCalls`,
+  EOAs fall back to plain transactions — with explicit
+  connect → switch-chain → sign → confirm states surfaced in the UI.
+
+## Develop
+
+```bash
+npm install
+npm run dev     # http://localhost:5173
+npm run build   # outputs dist/
+```
+
+### Networks: mainnet for players, testnet for testing
+
 Network selection lives in `src/config/tally.ts` (first match wins):
 
-1. `localStorage.setItem('merge-sip-network', 'base-sepolia')` — flip a running
-   build to testnet from the browser console (no rebuild)
-2. `VITE_TALLY_NETWORK=base-sepolia npm run build` — a staging/testnet build
+1. `localStorage.setItem('merge-sip-network', 'base-sepolia')` — flip a
+   running build to testnet from the browser console (no rebuild)
+2. `VITE_TALLY_NETWORK=base-sepolia npm run build` — a staging build
 3. default: `base` (mainnet)
 
-Deploy the contract to **both** networks and put each address in the
-`ADDRESSES` map in `src/config/tally.ts` — mainnet under `base` (what players
-use), testnet under `base-sepolia` (what you test against). The onchain UI
-stays completely hidden on any network whose address is still the zero
-address.
+The onchain UI hides entirely on any network whose address in the `ADDRESSES`
+map is the zero address — the game then runs fully offchain with a locally
+stored username (handy for development).
+
+Quick overrides, no rebuild:
+`localStorage.setItem('merge-sip-tally-address', '0x...')` and
+`localStorage.setItem('merge-sip-rpc-url', 'http://127.0.0.1:8545')`.
 
 ### Deploying the contract
-
-Two ways to deploy. For Base Sepolia you need testnet ETH from a
-[faucet](https://docs.base.org/base-chain/network-information/network-faucets);
-for mainnet, real ETH on Base.
 
 **Option A — Foundry** (the [Deploy on Base](https://docs.base.org/get-started/deploy-on-base) flow):
 
@@ -120,7 +183,7 @@ forge create ./src/DrinkTally.sol:DrinkTally \
 cast call <CONTRACT_ADDRESS> "totalServed()(uint256)" --rpc-url $BASE_SEPOLIA_RPC_URL
 ```
 
-**Option B — Node only** (no Foundry needed; uses solc + viem):
+**Option B — Node only** (no Foundry; solc + viem):
 
 ```bash
 npm i -D solc
@@ -129,12 +192,10 @@ PRIVATE_KEY=0x... node scripts/deploy.mjs --network base-sepolia   # testnet
 PRIVATE_KEY=0x... node scripts/deploy.mjs --network base           # mainnet
 ```
 
-Then paste the deployed address(es) into the `ADDRESSES` map in
-`src/config/tally.ts` and rebuild. (For a quick test without editing code:
-`localStorage.setItem('merge-sip-tally-address', '0x...')` and reload.)
+Paste the **deployed contract address** (not your wallet address!) into the
+`ADDRESSES` map in `src/config/tally.ts` and rebuild.
 
-**Local end-to-end loop** (no testnet ETH needed) — deploy to a local chain and
-play against it:
+### Local end-to-end loop (no testnet ETH needed)
 
 ```bash
 npm i -D solc ganache playwright
@@ -145,71 +206,37 @@ npm run dev                                                # terminal 3
 node scripts/e2e-local-chain.mjs <deployed-address>        # full flow test
 ```
 
-The E2E script drives the real game UI against the local chain: reads the
-tally, connects, saves a score (`serveScore`), waits for the receipt, and
-verifies the reads refresh.
+The E2E drives the real UI against the local chain: connect → onchain
+username claim → play → auto-serve → mint → leaderboard. Two more regression
+scripts cover badge-driven auto-saves (`e2e-milestone-save.mjs`,
+`e2e-badges-loading.mjs`).
 
-The Base App in-app wallet lives on Base mainnet, which is why the default
-production network is `base` — make sure the mainnet address is set before
-publishing the mini app.
-
-## Tech
-
-- [Vite](https://vite.dev) + TypeScript, zero-framework
-- Canvas 2D rendering with a small custom physics engine (circle collisions, sand friction, flick input)
-- All art is drawn procedurally at runtime (`src/drinks.ts`) — no image assets needed in-game
-- WebAudio synth for sound effects (`src/sfx.ts`) — no audio assets
-- [`@farcaster/miniapp-sdk`](https://miniapps.farcaster.xyz) for Base App integration
-  (`sdk.actions.ready()`, `composeCast` score sharing, haptics), with graceful
-  fallbacks so the game also runs in any plain browser
-- `@wagmi/core` + `viem` for the onchain layer (no React — the game is plain
-  canvas, so the guide's hooks map to core actions: `useReadContract` →
-  `readContract`, `useSendCalls` → `sendCalls`, `useCapabilities` →
-  `getCapabilities`, and so on)
-
-## Develop
-
-```bash
-npm install
-npm run dev     # http://localhost:5173
-npm run build   # outputs dist/
-```
-
-## Deploy as a Base Mini App
-
-1. **Deploy the static site** (Vercel, Netlify, Cloudflare Pages, …).
-   Build command `npm run build`, output directory `dist`. Note your production
-   URL, e.g. `https://merge-sip.vercel.app`.
-
-2. **Point the app at your URL.** Replace every occurrence of
-   `https://mergesip.xyz` with your production URL in:
-   - `public/.well-known/farcaster.json` (homeUrl, iconUrl, splashImageUrl, heroImageUrl, ogImageUrl)
-   - `index.html` (the `fc:miniapp` / `fc:frame` meta tags)
-   - `src/base.ts` (`APP_URL`)
-
-   Then rebuild and redeploy.
-
-3. **Verify ownership (account association).** Generate the signed
-   `accountAssociation` for your domain and paste it into
-   `public/.well-known/farcaster.json`:
-   - Easiest: [Base Build](https://base.dev) → your app → *Manifest* tool, or
-   - Farcaster developer tools → *Domains* → sign the manifest with your Farcaster custody account.
-
-4. **Link your Base Build account.** Put your Base Build account address in
-   `baseBuilder.allowedAddresses` in `public/.well-known/farcaster.json`.
-
-5. **Preview & publish.** Check the manifest is served at
-   `https://<your-domain>/.well-known/farcaster.json`, then preview the app with
-   the Base Build preview tool and share the URL in Base App — the `fc:miniapp`
-   embed makes it render as a launchable card.
-
-## Repo tooling
+### Repo tooling
 
 - `scripts/gen-assets.mjs` + `assetgen.html` — regenerate `public/icon.png`,
-  `public/splash.png`, `public/hero.png` by rendering the in-game art in
-  headless Chromium (`npm i -D playwright`, run `npm run dev`, then
-  `node scripts/gen-assets.mjs`).
+  `public/splash.png`, `public/hero.png` from the in-game art in headless
+  Chromium.
 - `scripts/smoke-test.mjs` — headless gameplay smoke test (launch, merge,
-  game over, restart) against the dev server.
-- `scripts/onchain-test.mjs` — headless test of the onchain flow using a mock
-  EIP-1193 provider (connect, capability detection, EOA write path).
+  game over, restart).
+- `scripts/onchain-test.mjs` — headless onchain-flow test with a mock
+  EIP-1193 provider.
+
+## Deploy your own instance
+
+Fork-friendly. The short version:
+
+1. **Static hosting** (Vercel/Netlify/Cloudflare Pages): build `npm run build`,
+   output `dist`, then point your domain's DNS at the host.
+2. **Swap the URLs** — replace `https://mergesip.xyz` with your domain in
+   `public/.well-known/farcaster.json`, `index.html` (the `fc:miniapp` /
+   `fc:frame` metas), and `src/base.ts` (`APP_URL`).
+3. **Verify domain ownership** — sign the `accountAssociation` for your domain
+   with the [Farcaster manifest tool](https://farcaster.xyz/~/developers/mini-apps/manifest)
+   (or [base.dev](https://base.dev)) and paste the `header`/`payload`/`signature`
+   into `public/.well-known/farcaster.json`.
+4. **Register on [base.dev](https://base.dev)** — add the `base:app_id` meta
+   tag it gives you to `index.html`, put your builder address in
+   `baseBuilder.allowedAddresses`, and (optionally) swap in your own
+   ERC-8021 builder-code suffix in `src/wallet.ts`.
+5. **Share your URL in Base App** — the embed meta renders it as a launch
+   card, and the verified manifest makes it indexable.
