@@ -23,6 +23,6 @@
     "noindex": false
   },
   "baseBuilder": {
-    "allowedAddresses": []
+    "allowedAddresses": ["0xC95A5aaeBC9b0Fc5F9d1F771Bca670cBa2e18C89"]
   }
 }

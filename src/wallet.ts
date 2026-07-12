@@ -41,6 +41,15 @@ import {
 import { isMiniApp } from './base.ts';
 import type { OnchainState, LeaderboardEntry } from './onchain.ts';
 
+// ERC-8021 builder-code suffix ("bc_desdbo0u", from base.dev): appended to
+// every transaction's calldata so onchain activity is attributed to the app
+// for Base builder rewards. Solidity ignores the extra calldata bytes.
+const BUILDER_CODE_SUFFIX =
+  '0x62635f64657364626f30750b0080218021802180218021802180218021' as const;
+
+const withBuilderCode = (data: `0x${string}`): `0x${string}` =>
+  (data + BUILDER_CODE_SUFFIX.slice(2)) as `0x${string}`;
+
 // Both Base networks are configured so wallets on either can connect and be
 // switched; the tally contract itself lives on TALLY_CHAIN. The RPC override
 // (local testing) only applies to the active tally chain.
@@ -414,7 +423,7 @@ async function sendWrite(
   setStatus(state, 'signing');
   if (state.supportsBatching) {
     const { id } = await sendCalls(config, {
-      calls: [{ to: TALLY_ADDRESS, data }],
+      calls: [{ to: TALLY_ADDRESS, data: withBuilderCode(data) }],
     });
     setStatus(state, 'confirming');
     // waitForCallsStatus returns { status, receipts } — it does NOT throw on
@@ -466,6 +475,7 @@ export async function serveScore(
           functionName: 'serveScore',
           args,
           chainId: TALLY_CHAIN.id,
+          dataSuffix: BUILDER_CODE_SUFFIX,
         }),
     );
     void refreshTally(state);
@@ -501,6 +511,7 @@ export async function mintScoreCard(state: OnchainState): Promise<void> {
           abi: tallyAbi,
           functionName: 'mintScoreCard',
           chainId: TALLY_CHAIN.id,
+          dataSuffix: BUILDER_CODE_SUFFIX,
         }),
     );
   } catch (e) {
@@ -538,6 +549,7 @@ export async function claimUsername(state: OnchainState, name: string): Promise<
           functionName: 'claimUsername',
           args: [clean],
           chainId: TALLY_CHAIN.id,
+          dataSuffix: BUILDER_CODE_SUFFIX,
         }),
     );
     state.username = clean;
