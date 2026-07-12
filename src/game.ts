@@ -50,11 +50,15 @@ type State = 'aim' | 'settle' | 'over';
 
 const SPAWN_WEIGHTS = [28, 24, 18, 13, 9]; // tiers 0..4, always available
 const BEST_KEY = 'merge-sip-best';
+// Widest the stage may get relative to window height (phone-portrait feel).
+const MAX_STAGE_AR = 0.62;
 
 export class Game {
   private ctx: CanvasRenderingContext2D;
-  private W = 0;
+  private W = 0; // stage width (<= window width on wide screens)
   private H = 0;
+  private fullW = 0; // real window width, for background/letterboxing
+  private offX = 0; // horizontal offset centering the stage in the window
 
   // board geometry (CSS px)
   private inner: Rect = { x: 0, y: 0, w: 0, h: 0 };
@@ -125,15 +129,21 @@ export class Game {
     this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
     const oldInner = { ...this.inner };
-    this.W = w;
+    // The game is portrait-first (phone mini app). On wide screens, clamp the
+    // stage to a phone-like column centered in the window; everything is
+    // drawn/hit-tested in stage coordinates and shifted right by offX.
+    this.fullW = w;
+    const stageW = Math.min(w, Math.max(h * MAX_STAGE_AR, 380));
+    this.offX = (w - stageW) / 2;
+    this.W = stageW;
     this.H = h;
 
     const hudH = Math.max(100, h * 0.13);
     const chainH = Math.max(54, h * 0.075);
-    const margin = Math.max(8, w * 0.025);
-    const frameT = Math.max(10, w * 0.035);
+    const margin = Math.max(8, stageW * 0.025);
+    const frameT = Math.max(10, stageW * 0.035);
 
-    this.frame = { x: margin, y: hudH, w: w - margin * 2, h: h - hudH - chainH - 8 };
+    this.frame = { x: margin, y: hudH, w: stageW - margin * 2, h: h - hudH - chainH - 8 };
     this.inner = {
       x: this.frame.x + frameT,
       y: this.frame.y + frameT,
@@ -196,7 +206,7 @@ export class Game {
 
   private pos(e: PointerEvent): { x: number; y: number } {
     const rect = this.canvas.getBoundingClientRect();
-    return { x: e.clientX - rect.x, y: e.clientY - rect.y };
+    return { x: e.clientX - rect.x - this.offX, y: e.clientY - rect.y };
   }
 
   private onDown(e: PointerEvent): void {
@@ -506,6 +516,8 @@ export class Game {
   render(): void {
     const ctx = this.ctx;
     this.drawBackground(ctx);
+    ctx.save();
+    ctx.translate(this.offX, 0);
     this.drawBoard(ctx);
 
     // bodies (sorted so bigger drinks overlap smaller ones naturally)
@@ -541,20 +553,22 @@ export class Game {
     this.drawHud(ctx);
     this.drawChain(ctx);
     if (this.state === 'over') this.drawGameOver(ctx);
+    ctx.restore();
   }
 
   private drawBackground(ctx: CanvasRenderingContext2D): void {
+    // covers the whole window, including the letterbox gutters on wide screens
     const g = ctx.createLinearGradient(0, 0, 0, this.H);
     g.addColorStop(0, '#8fd8f0');
     g.addColorStop(0.35, '#bfeaf7');
     g.addColorStop(0.5, '#f7e2b0');
     g.addColorStop(1, '#efd193');
     ctx.fillStyle = g;
-    ctx.fillRect(0, 0, this.W, this.H);
+    ctx.fillRect(0, 0, this.fullW, this.H);
 
     // sun
     ctx.beginPath();
-    ctx.arc(this.W * 0.85, this.H * 0.05, this.W * 0.09, 0, Math.PI * 2);
+    ctx.arc(this.fullW * 0.85, this.H * 0.05, this.W * 0.09, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255, 240, 170, 0.9)';
     ctx.fill();
   }
@@ -803,7 +817,8 @@ export class Game {
 
   private drawGameOver(ctx: CanvasRenderingContext2D): void {
     ctx.fillStyle = 'rgba(30, 20, 10, 0.6)';
-    ctx.fillRect(0, 0, this.W, this.H);
+    // dim the whole window, not just the centered stage
+    ctx.fillRect(-this.offX, 0, this.fullW, this.H);
 
     const onchainRows = onchain.state.enabled ? 1 : 0;
     const pw = Math.min(this.W * 0.86, 390);
