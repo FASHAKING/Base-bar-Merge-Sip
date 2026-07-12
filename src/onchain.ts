@@ -30,10 +30,13 @@ export interface OnchainState {
   myBest: bigint | null;
   supportsBatching: boolean | null; // null = unknown yet
   username: string | null; // claimed leaderboard name
+  usernameChecked: boolean; // onchain usernameOf lookup finished at least once
   nameStatus: TxStatus; // claimUsername transaction state
   nameError: string | null;
   leaderboard: LeaderboardEntry[] | null; // null = not fetched yet
   boardLoading: boolean;
+  weekly: LeaderboardEntry[] | null; // this week's top scores (from events)
+  weeklyLoading: boolean;
   badges: bigint | null; // milestone bitmask (bit N = tier-N first mixed)
   mintStatus: TxStatus; // mintScoreCard transaction state
   mintError: string | null;
@@ -48,10 +51,13 @@ export const state: OnchainState = {
   myBest: null,
   supportsBatching: null,
   username: null,
+  usernameChecked: false,
   nameStatus: 'idle',
   nameError: null,
   leaderboard: null,
   boardLoading: false,
+  weekly: null,
+  weeklyLoading: false,
   badges: null,
   mintStatus: 'idle',
   mintError: null,
@@ -84,6 +90,10 @@ export function mintScoreCard(): void {
 
 export function refreshLeaderboard(): void {
   void impl?.refreshLeaderboard(state);
+}
+
+export function refreshWeekly(): void {
+  void impl?.refreshWeekly(state);
 }
 
 /** Called on every new game so the next run can be served again. */

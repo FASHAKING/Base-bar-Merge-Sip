@@ -16,8 +16,17 @@ bar back up past the dashed line!
 - **Touch and drag** left/right to position your drink, **release** to send it sliding up the board.
 - Drinks glide on the sand with friction and bounce off the walls and each other.
 - Two matching drinks that touch **merge** into the next tier (+points).
-- Complete the **To-Go Order** shown at the top for a coin bonus.
+- **Combos** — chain merges within ~2 seconds and the points multiply (up to ×5).
+- **Wildcard shaker** — a rare silver shaker that merges with *any* drink (unlocks
+  after your first Pink Punch).
+- Complete the **To-Go Order** shown at the top for a coin bonus — and the
+  barback clears the three smallest drinks off the crowded board.
 - If a drink comes to rest **below the dashed line**, the bar is backed up — game over.
+- **Daily Mix** — one seeded run per day, the same drink sequence for every
+  player worldwide; your daily best is tracked separately.
+- **Streaks** — play at least once a day to grow your 🔥 streak (shown on the intro).
+- **Challenge links** — shared scores embed a `?c=<score>&by=<name>` link;
+  friends who open it see a "beat @name" target in-game.
 - Share your score straight to the feed with the **Share** button (opens the cast composer inside Base App).
 
 ## Onchain: the Drink Tally
@@ -30,9 +39,14 @@ The game has an optional onchain layer built with **wagmi + viem** following the
   tally, per-player `bestScore` / `bestTier`, and a top-10 leaderboard
   maintained onchain (`getLeaderboard`). Players pay their own gas — there is
   deliberately no gas sponsorship.
-- **Intro screen** — set your leaderboard username (an onchain transaction),
-  see your personal best as the milestone to beat, view your milestone badges,
-  and open the leaderboard.
+- **Intro screen** — when the contract is live, the game is fully wallet-gated:
+  connect a wallet first, then register a username (3-16 chars a-z/0-9/_) —
+  the Register button sends the `claimUsername` transaction, and nothing is
+  playable until the name is minted onchain. Returning players who already
+  claimed skip straight to play. Without a deployed contract the username is
+  stored locally (`merge-sip-username`) and the game works offchain. The
+  intro also shows your personal best, streak, milestone badges, and the
+  leaderboard.
 - **Auto-save new bests** — when a connected player finishes a run that beats
   their onchain best, the `serveScore` transaction starts automatically (the
   wallet still asks for the signature); no button hunting.
@@ -43,7 +57,9 @@ The game has an optional onchain layer built with **wagmi + viem** following the
   ERC-721 whose artwork is an SVG generated entirely by the contract
   (`tokenURI` returns base64 JSON + SVG; no IPFS, no servers).
 - **Leaderboard** — top mixologists by best score with their claimed names,
-  reachable from the intro and the game-over screen.
+  reachable from the intro and the game-over screen. An extra **This Week** tab
+  is rebuilt client-side from `ScoreServed` events (chunked `eth_getLogs` with
+  a localStorage cache), since the contract only stores the all-time top 10.
 - **Personal best in the HUD** — always visible under your score, switching to
   "New best!" the moment you pass it.
 - **Social sharing** — Recast opens the Farcaster cast composer; Share on 𝕏

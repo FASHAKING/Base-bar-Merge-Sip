@@ -2,6 +2,7 @@
 // Every call degrades gracefully so the game also works in a plain browser.
 
 import { sdk } from '@farcaster/miniapp-sdk';
+import { challengeUrl } from './modes.ts';
 
 export const APP_URL = 'https://merge-sip.example.com'; // replace with your deployed URL
 
@@ -46,12 +47,22 @@ export function openExternal(url: string): void {
   window.open(url, '_blank', 'noopener');
 }
 
-/** Open the cast composer prefilled with the player's score (recast). */
-export async function shareScore(score: number, bestTierName: string): Promise<void> {
-  const text = `I mixed my way to a ${bestTierName} and scored ${score.toLocaleString()} in Merge Sip 🍹 Can you out-pour me?`;
+/**
+ * Open the cast composer prefilled with the player's score (recast).
+ * The embedded link carries the score as a challenge, so friends who open it
+ * see "beat @name's score". `daily` tags the cast with the Daily Mix number.
+ */
+export async function shareScore(
+  score: number,
+  bestTierName: string,
+  opts: { by?: string | null; daily?: number | null } = {},
+): Promise<void> {
+  const dailyTag = opts.daily ? `Daily Mix #${opts.daily}: ` : '';
+  const text = `${dailyTag}I mixed my way to a ${bestTierName} and scored ${score.toLocaleString()} in Merge Sip 🍹 Can you out-pour me?`;
+  const url = challengeUrl(APP_URL, score, opts.by ?? null);
   if (inMiniApp) {
     try {
-      await sdk.actions.composeCast({ text, embeds: [APP_URL] });
+      await sdk.actions.composeCast({ text, embeds: [url] });
       return;
     } catch {
       /* fall through to web share */
@@ -59,9 +70,9 @@ export async function shareScore(score: number, bestTierName: string): Promise<v
   }
   try {
     if (navigator.share) {
-      await navigator.share({ text, url: APP_URL });
+      await navigator.share({ text, url });
     } else {
-      await navigator.clipboard.writeText(`${text} ${APP_URL}`);
+      await navigator.clipboard.writeText(`${text} ${url}`);
     }
   } catch {
     /* user cancelled */

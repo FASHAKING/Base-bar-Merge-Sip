@@ -92,6 +92,17 @@ await page.waitForTimeout(2500);
 await page.click('#connect-btn');
 await page.waitForTimeout(1500);
 
+// the game is locked until a username is registered (onchain claim)
+if (!(await page.evaluate(() => window.__onchain.username))) {
+  await page.fill('#username-input', 'tester_' + Math.floor(Math.random() * 10000));
+  await page.click('#register-btn');
+  for (let i = 0; i < 20; i++) {
+    await page.waitForTimeout(500);
+    const s = await page.evaluate(() => window.__onchain.nameStatus);
+    if (s === 'success' || s === 'error') break;
+  }
+}
+
 // Establish a nontrivial best (tier 5, score 10_000) + badge 5.
 await page.click('#play-btn');
 await page.waitForTimeout(400);

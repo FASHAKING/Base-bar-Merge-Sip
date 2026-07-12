@@ -41,6 +41,108 @@ export const DRINKS: DrinkDef[] = [
 
 export const MAX_TIER = DRINKS.length - 1;
 
+/** Sentinel tier for the wildcard shaker (merges with any drink). */
+export const WILD_TIER = -1;
+/** Wildcard physics radius as a fraction of board width (small, easy to slot). */
+export const WILD_RADIUS_FRAC = 0.06;
+
+/** Wildcard: a silver cocktail shaker with a shifting rainbow band. */
+export function drawWild(
+  ctx: CanvasRenderingContext2D,
+  x: number,
+  y: number,
+  r: number,
+  wobble = 0,
+  time = 0,
+): void {
+  ctx.save();
+  ctx.translate(x, y);
+  if (wobble) ctx.rotate(wobble);
+
+  // soft shadow under the base
+  ctx.beginPath();
+  ctx.ellipse(0, r * 0.98, r * 0.85, r * 0.22, 0, 0, Math.PI * 2);
+  ctx.fillStyle = 'rgba(90, 60, 20, 0.2)';
+  ctx.fill();
+
+  // pulsing rainbow glow so it reads as special at a glance
+  const hue = (time * 80) % 360;
+  const glow = ctx.createRadialGradient(0, 0, r * 0.4, 0, 0, r * 1.45);
+  glow.addColorStop(0, `hsla(${hue}, 90%, 65%, 0.45)`);
+  glow.addColorStop(1, `hsla(${hue}, 90%, 65%, 0)`);
+  ctx.beginPath();
+  ctx.arc(0, 0, r * 1.45, 0, Math.PI * 2);
+  ctx.fillStyle = glow;
+  ctx.fill();
+
+  // shaker body (tapered cup)
+  const topW = r * 0.62;
+  const botW = r * 0.78;
+  const topY = -r * 0.35;
+  const botY = r * 0.95;
+  ctx.beginPath();
+  ctx.moveTo(-topW, topY);
+  ctx.lineTo(-botW, botY - r * 0.12);
+  ctx.quadraticCurveTo(-botW, botY, -botW + r * 0.14, botY);
+  ctx.lineTo(botW - r * 0.14, botY);
+  ctx.quadraticCurveTo(botW, botY, botW, botY - r * 0.12);
+  ctx.lineTo(topW, topY);
+  ctx.closePath();
+  const steel = ctx.createLinearGradient(-botW, 0, botW, 0);
+  steel.addColorStop(0, '#aeb9c9');
+  steel.addColorStop(0.35, '#f4f7fb');
+  steel.addColorStop(0.65, '#dde5ee');
+  steel.addColorStop(1, '#96a2b4');
+  ctx.fillStyle = steel;
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.lineWidth = Math.max(1.2, r * 0.07);
+  ctx.stroke();
+
+  // rainbow band around the middle
+  ctx.save();
+  ctx.clip();
+  const bandY = r * 0.18;
+  const bandH = r * 0.3;
+  const colors = ['#ff6b6b', '#ffb347', '#ffe66d', '#7fe3c0', '#6d8dff', '#c77dff'];
+  const bw = (botW * 2) / colors.length;
+  for (let i = 0; i < colors.length; i++) {
+    ctx.fillStyle = colors[(i + Math.floor(time * 3)) % colors.length];
+    ctx.fillRect(-botW + i * bw, bandY, bw + 1, bandH);
+  }
+  ctx.restore();
+
+  // neck + cap
+  ctx.beginPath();
+  ctx.moveTo(-topW * 0.85, topY);
+  ctx.lineTo(-topW * 0.6, -r * 0.72);
+  ctx.lineTo(topW * 0.6, -r * 0.72);
+  ctx.lineTo(topW * 0.85, topY);
+  ctx.closePath();
+  ctx.fillStyle = '#cfd8e4';
+  ctx.fill();
+  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.ellipse(0, -r * 0.78, topW * 0.45, r * 0.12, 0, 0, Math.PI * 2);
+  ctx.fillStyle = '#f4f7fb';
+  ctx.fill();
+  ctx.stroke();
+
+  // shine
+  ctx.beginPath();
+  ctx.moveTo(-topW * 0.55, topY + r * 0.15);
+  ctx.quadraticCurveTo(-botW * 0.6, r * 0.3, -botW * 0.5, botY - r * 0.25);
+  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
+  ctx.lineWidth = Math.max(1.2, r * 0.09);
+  ctx.lineCap = 'round';
+  ctx.stroke();
+
+  // sparkle
+  star(ctx, topW * 0.75, -r * 0.9, r * 0.22, '#fff9d6', '#f4a300');
+  ctx.restore();
+}
+
 /** Draw a drink (side view) centered at (x, y) fitting a circle of radius r. */
 export function drawDrink(
   ctx: CanvasRenderingContext2D,

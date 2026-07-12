@@ -53,6 +53,12 @@ export const TALLY_ADDRESS = ((addrOverride && /^0x[0-9a-fA-F]{40}$/.test(addrOv
 export const tallyEnabled =
   TALLY_ADDRESS !== '0x0000000000000000000000000000000000000000';
 
+// Block the mainnet contract was created in — event scans never look earlier.
+export const TALLY_DEPLOY_BLOCK = 48429392n;
+
+// ~1 week of Base blocks (2s block time), the weekly-leaderboard window.
+export const WEEK_OF_BLOCKS = 302_400n;
+
 // Optional RPC override for local testing (e.g. a ganache/anvil node running
 // with --chain.chainId 84532):
 //   localStorage.setItem('merge-sip-rpc-url', 'http://127.0.0.1:8545')
