@@ -4,7 +4,7 @@
 import { sdk } from '@farcaster/miniapp-sdk';
 import { challengeUrl } from './modes.ts';
 
-export const APP_URL = 'https://merge-sip.example.com'; // replace with your deployed URL
+export const APP_URL = 'https://mergesip.xyz'; // replace with your deployed URL
 
 let inMiniApp = false;
 
