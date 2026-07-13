@@ -714,74 +714,112 @@ export class Game {
     const { fullW, H } = this;
     // covers the whole window, including the letterbox gutters on wide screens
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#6cc4ea');
-    g.addColorStop(0.28, '#a5e1f5');
-    g.addColorStop(0.42, '#dbf2fa');
-    g.addColorStop(0.455, '#2e8fc7');
-    g.addColorStop(0.5, '#57b3de');
-    g.addColorStop(0.515, '#fdf3d5');
-    g.addColorStop(0.55, '#f7e2b0');
-    g.addColorStop(1, '#e8ca86');
+    g.addColorStop(0, '#39aee6');
+    g.addColorStop(0.26, '#7fd2f2');
+    g.addColorStop(0.42, '#c9edfa');
+    g.addColorStop(0.452, '#0f83c9');
+    g.addColorStop(0.49, '#2fa3dc');
+    g.addColorStop(0.512, '#7fd0ea');
+    g.addColorStop(0.53, '#ffedbd');
+    g.addColorStop(0.75, '#f7dfa0');
+    g.addColorStop(1, '#eac26f');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, fullW, H);
 
-    // sun with a soft halo
+    // sun: hot core + layered glow
     const sx = fullW * 0.82;
     const sy = H * 0.1;
-    const sr = this.W * 0.085;
-    const halo = ctx.createRadialGradient(sx, sy, sr * 0.4, sx, sy, sr * 3);
-    halo.addColorStop(0, 'rgba(255, 244, 190, 0.85)');
-    halo.addColorStop(1, 'rgba(255, 244, 190, 0)');
+    const sr = this.W * 0.095;
+    const halo = ctx.createRadialGradient(sx, sy, sr * 0.3, sx, sy, sr * 3.4);
+    halo.addColorStop(0, 'rgba(255, 245, 170, 0.95)');
+    halo.addColorStop(0.35, 'rgba(255, 235, 140, 0.45)');
+    halo.addColorStop(1, 'rgba(255, 235, 140, 0)');
     ctx.beginPath();
-    ctx.arc(sx, sy, sr * 3, 0, Math.PI * 2);
+    ctx.arc(sx, sy, sr * 3.4, 0, Math.PI * 2);
     ctx.fillStyle = halo;
     ctx.fill();
+    const core = ctx.createRadialGradient(sx - sr * 0.25, sy - sr * 0.25, sr * 0.1, sx, sy, sr);
+    core.addColorStop(0, '#fffbe0');
+    core.addColorStop(1, '#ffe45c');
     ctx.beginPath();
     ctx.arc(sx, sy, sr, 0, Math.PI * 2);
-    ctx.fillStyle = '#fff3b8';
+    ctx.fillStyle = core;
     ctx.fill();
 
     // drifting clouds
-    ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    for (const [speed, y, s, off] of [
-      [9, 0.08, 1.0, 0],
-      [14, 0.16, 0.7, 500],
-      [6, 0.24, 1.25, 900],
+    for (const [speed, y, s, off, alpha] of [
+      [9, 0.08, 1.0, 0, 0.95],
+      [14, 0.17, 0.7, 500, 0.85],
+      [6, 0.26, 1.3, 900, 0.9],
     ]) {
       const span = fullW + 360;
       const x = ((this.time * speed + off) % span) - 180;
-      this.cloud(ctx, x, H * y, this.W * 0.055 * s);
+      this.cloud(ctx, x, H * y, this.W * 0.055 * s, alpha);
     }
 
-    // sea: animated crest lines on the water band
-    const seaTop = H * 0.455;
-    ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-    ctx.lineWidth = 2;
+    // sea: animated crest lines + a scalloped foam edge on the shore
+    const seaTop = H * 0.452;
+    ctx.strokeStyle = 'rgba(255,255,255,0.65)';
+    ctx.lineWidth = 2.5;
     for (let band = 0; band < 2; band++) {
-      const y0 = seaTop + band * H * 0.022 + H * 0.008;
+      const y0 = seaTop + band * H * 0.02 + H * 0.008;
       ctx.beginPath();
       for (let x = 0; x <= fullW; x += 14) {
         const y =
-          y0 + Math.sin(x * 0.02 + this.time * (1.2 + band * 0.5) + band * 2) * (2.2 + band);
+          y0 + Math.sin(x * 0.02 + this.time * (1.2 + band * 0.5) + band * 2) * (2.4 + band);
         if (x === 0) ctx.moveTo(x, y);
         else ctx.lineTo(x, y);
       }
       ctx.stroke();
     }
+    // foam where the water meets the sand
+    const shoreY = H * 0.517;
+    ctx.beginPath();
+    ctx.moveTo(0, shoreY + 14);
+    for (let x = 0; x <= fullW; x += 10) {
+      ctx.lineTo(x, shoreY + Math.sin(x * 0.035 + this.time * 0.8) * 3.5);
+    }
+    ctx.lineTo(fullW, shoreY + 14);
+    ctx.closePath();
+    ctx.fillStyle = 'rgba(255,255,255,0.85)';
+    ctx.fill();
+    ctx.beginPath();
+    for (let x = 0; x <= fullW; x += 10) {
+      const y = shoreY + 9 + Math.sin(x * 0.028 - this.time * 0.6 + 2) * 3;
+      if (x === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    }
+    ctx.strokeStyle = 'rgba(255,255,255,0.45)';
+    ctx.lineWidth = 3;
+    ctx.stroke();
 
-    // palm trees in the letterbox gutters on wide screens
+    // beach dressing in the letterbox gutters on wide screens
     if (this.offX > 130) {
-      this.palm(ctx, this.offX * 0.45, H * 0.62, this.offX * 0.28, 1);
-      this.palm(ctx, fullW - this.offX * 0.45, H * 0.66, this.offX * 0.24, -1);
+      this.palm(ctx, this.offX * 0.45, H * 0.6, this.offX * 0.3, 1);
+      this.palm(ctx, fullW - this.offX * 0.45, H * 0.64, this.offX * 0.26, -1);
+      this.starfish(ctx, this.offX * 0.25, H * 0.93, this.W * 0.022);
+      this.shell(ctx, fullW - this.offX * 0.3, H * 0.95, this.W * 0.02);
     }
   }
 
-  private cloud(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+  private cloud(
+    ctx: CanvasRenderingContext2D,
+    x: number,
+    y: number,
+    r: number,
+    alpha: number,
+  ): void {
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = '#ffffff';
     ctx.beginPath();
-    ctx.ellipse(x, y, r * 1.5, r * 0.62, 0, 0, Math.PI * 2);
-    ctx.ellipse(x - r, y + r * 0.18, r * 0.9, r * 0.48, 0, 0, Math.PI * 2);
-    ctx.ellipse(x + r, y + r * 0.15, r, r * 0.5, 0, 0, Math.PI * 2);
+    ctx.ellipse(x, y, r * 1.55, r * 0.6, 0, 0, Math.PI * 2);
+    ctx.ellipse(x - r * 1.05, y + r * 0.22, r * 0.85, r * 0.42, 0, 0, Math.PI * 2);
+    ctx.ellipse(x + r * 1.05, y + r * 0.2, r * 0.95, r * 0.46, 0, 0, Math.PI * 2);
+    ctx.ellipse(x - r * 0.3, y - r * 0.42, r * 0.75, r * 0.45, 0, 0, Math.PI * 2);
+    ctx.ellipse(x + r * 0.45, y - r * 0.3, r * 0.65, r * 0.4, 0, 0, Math.PI * 2);
     ctx.fill();
+    ctx.restore();
   }
 
   private palm(
@@ -791,46 +829,148 @@ export class Game {
     size: number,
     lean: number,
   ): void {
-    const sway = Math.sin(this.time * 0.7 + lean) * 0.03;
+    const sway = Math.sin(this.time * 0.7 + lean) * 0.025;
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(sway);
 
-    // trunk
-    ctx.beginPath();
-    ctx.moveTo(-size * 0.06, size * 0.9);
-    ctx.quadraticCurveTo(lean * size * 0.28, size * 0.3, lean * size * 0.32, -size * 0.55);
-    ctx.lineWidth = Math.max(6, size * 0.11);
-    ctx.strokeStyle = '#9a6b3d';
-    ctx.lineCap = 'round';
-    ctx.stroke();
-
-    // fronds
+    // trunk: dark base stroke + lighter core, with ring ridges
     const topX = lean * size * 0.32;
     const topY = -size * 0.55;
-    ctx.strokeStyle = '#3da05f';
-    ctx.lineWidth = Math.max(5, size * 0.09);
-    for (let i = 0; i < 6; i++) {
-      const a = -Math.PI * 0.9 + (i / 5) * Math.PI * 0.8 + sway * 2;
+    const trunk = (width: number, color: string): void => {
+      ctx.beginPath();
+      ctx.moveTo(-size * 0.06, size * 0.92);
+      ctx.quadraticCurveTo(lean * size * 0.28, size * 0.3, topX, topY);
+      ctx.lineWidth = width;
+      ctx.strokeStyle = color;
+      ctx.lineCap = 'round';
+      ctx.stroke();
+    };
+    trunk(Math.max(9, size * 0.15), '#8a5a2c');
+    trunk(Math.max(5, size * 0.09), '#b07a42');
+    ctx.strokeStyle = 'rgba(90, 55, 20, 0.4)';
+    ctx.lineWidth = 2;
+    for (let i = 1; i <= 5; i++) {
+      const t = i / 6;
+      const px = (1 - t) * (1 - t) * (-size * 0.06) + 2 * (1 - t) * t * (lean * size * 0.28) + t * t * topX;
+      const py = (1 - t) * (1 - t) * size * 0.92 + 2 * (1 - t) * t * size * 0.3 + t * t * topY;
+      ctx.beginPath();
+      ctx.arc(px, py, size * 0.055, Math.PI * 0.15, Math.PI * 0.85);
+      ctx.stroke();
+    }
+
+    // fronds: dark under-layer then a brighter top layer (filled leaf shapes)
+    const frond = (a: number, len: number, color: string): void => {
+      const tipX = topX + Math.cos(a) * len;
+      const tipY = topY + Math.sin(a) * len * 0.7 + size * 0.1;
+      const bulge = 0.28 * len;
+      const nx = -Math.sin(a);
+      const ny = Math.cos(a) * 0.7;
       ctx.beginPath();
       ctx.moveTo(topX, topY);
       ctx.quadraticCurveTo(
-        topX + Math.cos(a) * size * 0.5,
-        topY + Math.sin(a) * size * 0.42 - size * 0.12,
-        topX + Math.cos(a) * size * 0.85,
-        topY + Math.sin(a) * size * 0.55 + size * 0.16,
+        (topX + tipX) / 2 + nx * bulge,
+        (topY + tipY) / 2 + ny * bulge - len * 0.18,
+        tipX,
+        tipY,
+      );
+      ctx.quadraticCurveTo(
+        (topX + tipX) / 2 - nx * bulge * 0.3,
+        (topY + tipY) / 2 - ny * bulge * 0.3 - len * 0.02,
+        topX,
+        topY,
+      );
+      ctx.closePath();
+      ctx.fillStyle = color;
+      ctx.fill();
+    };
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI + (i / 6) * Math.PI + sway * 2;
+      frond(a, size * (0.72 + (i % 2) * 0.16), '#2c8a4b');
+    }
+    for (let i = 0; i < 7; i++) {
+      const a = -Math.PI + (i / 6) * Math.PI + sway * 2 + 0.06;
+      frond(a, size * (0.6 + (i % 2) * 0.14), '#46c068');
+    }
+
+    // coconuts
+    for (const [cx, cy] of [
+      [-0.1, 0.04],
+      [0.08, 0.08],
+      [-0.01, 0.13],
+    ]) {
+      const nx = topX + cx * size;
+      const ny = topY + cy * size;
+      ctx.beginPath();
+      ctx.arc(nx, ny, size * 0.08, 0, Math.PI * 2);
+      ctx.fillStyle = '#6f4320';
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(nx - size * 0.025, ny - size * 0.025, size * 0.025, 0, Math.PI * 2);
+      ctx.fillStyle = 'rgba(255,255,255,0.35)';
+      ctx.fill();
+    }
+
+    // grass tuft at the base
+    ctx.strokeStyle = '#3da05f';
+    ctx.lineWidth = Math.max(2.5, size * 0.045);
+    ctx.lineCap = 'round';
+    for (const [dx, tilt] of [
+      [-0.14, -0.5],
+      [-0.05, -0.15],
+      [0.05, 0.2],
+      [0.15, 0.55],
+    ]) {
+      ctx.beginPath();
+      ctx.moveTo(dx * size, size * 0.94);
+      ctx.quadraticCurveTo(
+        dx * size + tilt * size * 0.12,
+        size * 0.82,
+        dx * size + tilt * size * 0.22,
+        size * 0.74,
       );
       ctx.stroke();
     }
-    // coconuts
-    ctx.fillStyle = '#6f4320';
-    for (const [cx, cy] of [
-      [-0.07, 0.02],
-      [0.07, 0.05],
-    ]) {
+    ctx.restore();
+  }
+
+  private starfish(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.rotate(0.35);
+    ctx.beginPath();
+    for (let i = 0; i < 10; i++) {
+      const a = (i / 10) * Math.PI * 2 - Math.PI / 2;
+      const rr = i % 2 === 0 ? r : r * 0.5;
+      if (i === 0) ctx.moveTo(Math.cos(a) * rr, Math.sin(a) * rr);
+      else ctx.lineTo(Math.cos(a) * rr, Math.sin(a) * rr);
+    }
+    ctx.closePath();
+    ctx.fillStyle = '#ff7a4d';
+    ctx.fill();
+    ctx.strokeStyle = '#e05528';
+    ctx.lineWidth = Math.max(1.5, r * 0.12);
+    ctx.lineJoin = 'round';
+    ctx.stroke();
+    ctx.restore();
+  }
+
+  private shell(ctx: CanvasRenderingContext2D, x: number, y: number, r: number): void {
+    ctx.save();
+    ctx.translate(x, y);
+    ctx.beginPath();
+    ctx.arc(0, 0, r, Math.PI, 0);
+    ctx.closePath();
+    ctx.fillStyle = '#ffdfb8';
+    ctx.fill();
+    ctx.strokeStyle = '#d8a06a';
+    ctx.lineWidth = Math.max(1.2, r * 0.1);
+    ctx.stroke();
+    for (const a of [-0.6, -0.2, 0.2, 0.6]) {
       ctx.beginPath();
-      ctx.arc(topX + cx * size, topY + cy * size + size * 0.06, size * 0.07, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(0, 0);
+      ctx.lineTo(Math.cos(-Math.PI / 2 + a) * r * 0.95, Math.sin(-Math.PI / 2 + a) * r * 0.95);
+      ctx.stroke();
     }
     ctx.restore();
   }
@@ -850,9 +990,9 @@ export class Game {
 
     roundRect(ctx, frame.x, frame.y, frame.w, frame.h, 14);
     const wood = ctx.createLinearGradient(frame.x, frame.y, frame.x + frame.w, frame.y);
-    wood.addColorStop(0, '#a8672f');
-    wood.addColorStop(0.5, '#c07d3e');
-    wood.addColorStop(1, '#a8672f');
+    wood.addColorStop(0, '#a5642a');
+    wood.addColorStop(0.5, '#c8813c');
+    wood.addColorStop(1, '#a5642a');
     ctx.fillStyle = wood;
     ctx.fill();
 
@@ -878,9 +1018,9 @@ export class Game {
     // sand surface
     roundRect(ctx, inner.x, inner.y, inner.w, inner.h, 10);
     const sand = ctx.createLinearGradient(0, inner.y, 0, inner.y + inner.h);
-    sand.addColorStop(0, '#f3e0b8');
-    sand.addColorStop(0.5, '#f9ecd0');
-    sand.addColorStop(1, '#f1dcb0');
+    sand.addColorStop(0, '#f7e2b4');
+    sand.addColorStop(0.5, '#fdeecb');
+    sand.addColorStop(1, '#f4dca6');
     ctx.fillStyle = sand;
     ctx.fill();
     ctx.save();
