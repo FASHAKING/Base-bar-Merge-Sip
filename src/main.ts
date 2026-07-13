@@ -2,6 +2,10 @@ import { Game } from './game.ts';
 import { initMiniApp } from './base.ts';
 import { initOnchain, state as onchainState } from './onchain.ts';
 import { initUi } from './ui.ts';
+import { inject } from '@vercel/analytics';
+
+// Initialize Vercel Web Analytics
+inject();
 
 // Warm up the display font so canvas text picks it up as soon as it loads
 // (frames render continuously, so late arrival is seamless).
