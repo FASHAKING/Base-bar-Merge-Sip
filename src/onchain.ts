@@ -37,6 +37,7 @@ export interface OnchainState {
   leaderboard: LeaderboardEntry[] | null; // null = not fetched yet
   boardLoading: boolean;
   weekly: LeaderboardEntry[] | null; // this week's top scores (from events)
+  fullBoard: LeaderboardEntry[] | null; // every player, ranked (from events)
   weeklyLoading: boolean;
   badges: bigint | null; // milestone bitmask (bit N = tier-N first mixed)
   mintStatus: TxStatus; // mintScoreCard transaction state
@@ -59,6 +60,7 @@ export const state: OnchainState = {
   leaderboard: null,
   boardLoading: false,
   weekly: null,
+  fullBoard: null,
   weeklyLoading: false,
   badges: null,
   mintStatus: 'idle',
@@ -94,8 +96,8 @@ export function refreshLeaderboard(): void {
   void impl?.refreshLeaderboard(state);
 }
 
-export function refreshWeekly(): void {
-  void impl?.refreshWeekly(state);
+export function refreshBoards(): void {
+  void impl?.refreshBoards(state);
 }
 
 /** Called on every new game so the next run can be served again. */

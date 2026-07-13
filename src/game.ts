@@ -1329,13 +1329,13 @@ export class Game {
           case 'connecting':
           case 'switching':
           case 'signing':
-            serveText = 'Confirm in wallet to save your new best…';
+            serveText = 'Confirm in wallet to serve this round…';
             break;
           case 'confirming':
-            serveText = 'Saving your new best onchain…';
+            serveText = 'Serving this round onchain…';
             break;
           case 'success':
-            serveText = 'New best saved onchain ✓';
+            serveText = 'Round served onchain ✓';
             serveColor = '#2eb872';
             break;
           case 'error':
@@ -1344,17 +1344,16 @@ export class Game {
             serveColor = '#c0392b';
             break;
           default: {
+            // every backed-up bar can be served onchain — it always counts
+            // toward the global tally, and bests/badges update when earned
             const beatsScore = this.score > Number(oc.myBest ?? 0n);
-            serveTappable = this.runWorthSaving(true);
-            if (!serveTappable) {
-              serveText = `Onchain best: ${(oc.myBest ?? 0n).toLocaleString()} — not beaten this run`;
-            } else if (beatsScore) {
-              serveText = '⛓ Tap to save this score onchain';
-            } else if (oc.badges !== null) {
+            serveTappable = this.score > 0;
+            if (beatsScore) {
+              serveText = '⛓ Tap to save this new best onchain';
+            } else if (this.runWorthSaving(true)) {
               serveText = '⛓ Tap to save your new milestone onchain';
             } else {
-              // tier 5+ run, badge cache not loaded — offer the save neutrally
-              serveText = '⛓ Tap to save this run onchain';
+              serveText = '🍹 Tap to serve this round onchain (+1 to the tally)';
             }
           }
         }

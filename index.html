@@ -297,14 +297,24 @@
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
         box-shadow: 0 3px 8px rgba(239, 122, 16, 0.35);
       }
+      #board-rank {
+        color: #e8801a;
+      }
+      #board-rank[hidden] {
+        display: none;
+      }
       #board-list {
         margin: 0;
-        padding: 0;
+        padding: 2px;
         list-style: none;
         text-align: left;
         display: flex;
         flex-direction: column;
         gap: 6px;
+        max-height: 46vh;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        touch-action: pan-y;
       }
       #board-list li {
         display: flex;
@@ -317,10 +327,15 @@
         color: var(--ink);
         box-shadow: 0 1px 3px rgba(60, 30, 5, 0.08);
       }
-      #board-list li:first-child {
+      #board-list li.podium {
         background: linear-gradient(180deg, #fff8dc, #ffedb8);
         border-color: #f2cd7c;
         box-shadow: 0 2px 8px rgba(244, 177, 62, 0.3);
+      }
+      #board-list li.me {
+        background: linear-gradient(180deg, #e9fbf1, #d2f5e1);
+        border-color: #7fd9ab;
+        box-shadow: 0 2px 8px rgba(46, 184, 114, 0.25);
       }
       #board-list .rank {
         font-weight: 700;
@@ -381,6 +396,7 @@
           <button id="tab-all" class="tab active">All-time</button>
           <button id="tab-week" class="tab">This Week</button>
         </div>
+        <p id="board-rank" class="best-line" hidden></p>
         <ol id="board-list"></ol>
         <button id="board-close" class="btn green">Back</button>
       </div>
