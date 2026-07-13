@@ -36,11 +36,11 @@
 
     <style>
       :root {
-        --ink: #4a2f14;
-        --ink-soft: #9a7b4f;
+        --ink: #3f2711;
+        --ink-soft: #8a6335;
         --cream: #fffaf0;
-        --coral: #e0453a;
-        --gold: #f4b13e;
+        --coral: #ed2228;
+        --gold: #ffb31f;
       }
       html,
       body {
@@ -48,7 +48,7 @@
         padding: 0;
         height: 100%;
         overflow: hidden;
-        background: #7ecbe8;
+        background: #05a9ef;
         touch-action: none;
         -webkit-user-select: none;
         user-select: none;
@@ -67,9 +67,9 @@
         align-items: center;
         justify-content: center;
         padding: 20px;
-        background: linear-gradient(180deg, rgba(60, 140, 185, 0.35), rgba(120, 80, 30, 0.45));
-        backdrop-filter: blur(7px) saturate(1.15);
-        -webkit-backdrop-filter: blur(7px) saturate(1.15);
+        background: linear-gradient(180deg, rgba(0, 164, 235, 0.28), rgba(170, 112, 32, 0.42));
+        backdrop-filter: blur(8px) saturate(1.35);
+        -webkit-backdrop-filter: blur(8px) saturate(1.35);
         z-index: 10;
       }
       .overlay[hidden] {
@@ -86,7 +86,7 @@
         border-radius: 26px;
         padding: 34px 24px 26px;
         box-shadow:
-          0 30px 60px -12px rgba(60, 30, 5, 0.5),
+          0 34px 70px -14px rgba(60, 30, 5, 0.52),
           0 8px 20px rgba(60, 30, 5, 0.25),
           inset 0 1px 0 rgba(255, 255, 255, 0.9);
         display: flex;
@@ -109,8 +109,8 @@
         height: 14px;
         background: repeating-linear-gradient(
           90deg,
-          #ff6f61 0 26px,
-          #fff3df 26px 52px
+          #ff3f3f 0 26px,
+          #fff8e8 26px 52px
         );
         border-radius: 26px 26px 0 0;
       }
@@ -178,10 +178,10 @@
           inset 0 1.5px 0 rgba(255, 255, 255, 0.35),
           inset 0 -1px 0 rgba(0, 0, 0, 0.12);
       }
-      .btn.green { background: linear-gradient(180deg, #43d98a, #1fa25c); }
-      .btn.blue { background: linear-gradient(180deg, #6a86ff, #3d5ef0); }
-      .btn.orange { background: linear-gradient(180deg, #ffa43d, #ef7a10); }
-      .btn.wood { background: linear-gradient(180deg, #bd8146, #925c26); }
+      .btn.green { background: linear-gradient(180deg, #4ff09a, #08a84e); }
+      .btn.blue { background: linear-gradient(180deg, #3d8cff, #1555ff); }
+      .btn.orange { background: linear-gradient(180deg, #ffb12e, #ff7a00); }
+      .btn.wood { background: linear-gradient(180deg, #c98a4a, #875118); }
       .btn[disabled] {
         opacity: 0.45;
         filter: saturate(0.4);
@@ -291,7 +291,7 @@
         transition: all 0.15s ease;
       }
       .tab.active {
-        background: linear-gradient(180deg, #ffa43d, #ef7a10);
+        background: linear-gradient(180deg, #ffb12e, #ff7a00);
         border-color: transparent;
         color: #fff;
         text-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
@@ -310,7 +310,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        background: linear-gradient(180deg, #fffdf6, #fdf2da);
+        background: linear-gradient(180deg, #fffefa, #fff2d5);
         border: 1px solid rgba(236, 211, 167, 0.8);
         border-radius: 14px;
         padding: 9px 14px;
@@ -318,7 +318,7 @@
         box-shadow: 0 1px 3px rgba(60, 30, 5, 0.08);
       }
       #board-list li:first-child {
-        background: linear-gradient(180deg, #fff8dc, #ffedb8);
+        background: linear-gradient(180deg, #fff8c7, #ffe582);
         border-color: #f2cd7c;
         box-shadow: 0 2px 8px rgba(244, 177, 62, 0.3);
       }
