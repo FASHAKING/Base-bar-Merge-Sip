@@ -144,6 +144,41 @@ export function drawWild(
 }
 
 /** Draw a drink (side view) centered at (x, y) fitting a circle of radius r. */
+// Drinks are drawn many times per frame (bodies + aim + next + order card +
+// the whole tier chain), and each is ~25 canvas path ops. Pre-render each
+// tier once per size into an offscreen sprite, then blit the bitmap — an
+// order-of-magnitude fewer ops per frame. Sprites are keyed by tier + integer
+// radius (radius only changes on resize), so steady play reuses ~20 bitmaps.
+interface Sprite {
+  canvas: HTMLCanvasElement;
+  pad: number; // half-size in CSS px; the drink center sits at (pad, pad)
+}
+const spriteCache = new Map<string, Sprite>();
+// garnish/glow extend to ~1.7r above center and the legendary glow to 1.5r
+const SPRITE_PAD = 1.85;
+
+function drinkSprite(tier: number, r: number): Sprite {
+  const key = `${tier}:${r}`;
+  const cached = spriteCache.get(key);
+  if (cached) return cached;
+
+  const pad = Math.ceil(r * SPRITE_PAD);
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = pad * 2 * dpr;
+  const cx = canvas.getContext('2d')!;
+  cx.scale(dpr, dpr);
+  cx.translate(pad, pad);
+  renderDrink(cx, tier, r);
+
+  const sprite = { canvas, pad };
+  // bound memory: drop the whole cache if it grows past a few resizes' worth
+  if (spriteCache.size > 120) spriteCache.clear();
+  spriteCache.set(key, sprite);
+  return sprite;
+}
+
+/** Blit the cached drink sprite (fast path used every frame). */
 export function drawDrink(
   ctx: CanvasRenderingContext2D,
   tier: number,
@@ -152,10 +187,17 @@ export function drawDrink(
   r: number,
   wobble = 0,
 ): void {
-  const d = DRINKS[tier];
+  const { canvas, pad } = drinkSprite(tier, Math.round(r));
   ctx.save();
   ctx.translate(x, y);
   if (wobble) ctx.rotate(wobble);
+  ctx.drawImage(canvas, -pad, -pad, pad * 2, pad * 2);
+  ctx.restore();
+}
+
+/** Draw a drink's full art at the origin (used to bake a sprite). */
+function renderDrink(ctx: CanvasRenderingContext2D, tier: number, r: number): void {
+  const d = DRINKS[tier];
 
   // soft radial shadow under the base (fades at the edges — reads as HD)
   ctx.save();
@@ -196,7 +238,6 @@ export function drawDrink(
   }
 
   drawGarnish(ctx, tier, r);
-  ctx.restore();
 }
 
 // ------------------------------------------------------------- glass shapes

@@ -454,7 +454,7 @@ async function sendWrite(
   setStatus: (s: OnchainState, v: OnchainState['status']) => void,
   data: `0x${string}`,
   write: () => Promise<`0x${string}`>,
-): Promise<void> {
+): Promise<string | null> {
   // 1. connect if needed
   if (!getAccount(config).address) {
     setStatus(state, 'connecting');
@@ -470,6 +470,7 @@ async function sendWrite(
   // 3. capability detection (EIP-5792)
   if (state.supportsBatching === null) await detectCapabilities(state);
 
+  let txHash: string | null = null;
   setStatus(state, 'signing');
   if (state.supportsBatching) {
     const { id } = await sendCalls(config, {
@@ -481,7 +482,9 @@ async function sendWrite(
     // reverted bundle doesn't silently pass as 'success'.
     const result = await waitForCallsStatus(config, { id });
     const bundleStatus = String(result?.status ?? '').toLowerCase();
-    const receipts: Array<{ status?: string | number }> = Array.isArray(result?.receipts)
+    const receipts: Array<{ status?: string | number; transactionHash?: string }> = Array.isArray(
+      result?.receipts,
+    )
       ? result.receipts
       : [];
     const allSucceeded = receipts.every((r) => {
@@ -492,8 +495,10 @@ async function sendWrite(
     if (!bundleOk || (receipts.length > 0 && !allSucceeded)) {
       throw new Error('Transaction reverted');
     }
+    txHash = receipts[0]?.transactionHash ?? null;
   } else {
     const hash = await write();
+    txHash = hash;
     setStatus(state, 'confirming');
     const receipt = await waitForTransactionReceipt(config, {
       hash,
@@ -502,6 +507,7 @@ async function sendWrite(
     if (receipt.status !== 'success') throw new Error('Transaction reverted');
   }
   setStatus(state, 'success');
+  return txHash;
 }
 
 /** Record the finished game onchain (win or lose). */
@@ -514,7 +520,7 @@ export async function serveScore(
   state.error = null;
   const args = [BigInt(score), tier] as const;
   try {
-    await sendWrite(
+    const hash = await sendWrite(
       state,
       (s, v) => (s.status = v),
       encodeFunctionData({ abi: tallyAbi, functionName: 'serveScore', args }),
@@ -528,6 +534,8 @@ export async function serveScore(
           dataSuffix: BUILDER_CODE_SUFFIX,
         }),
     );
+    state.servedByMe += 1;
+    state.lastServeTx = hash;
     void refreshTally(state);
     void refreshMyBest(state);
     void refreshBadges(state);

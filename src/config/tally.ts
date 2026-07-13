@@ -42,6 +42,9 @@ export const TALLY_NETWORK: Network = isNetwork(lsNetwork)
 
 export const TALLY_CHAIN = TALLY_NETWORK === 'base' ? base : baseSepolia;
 
+// Block explorer for the active chain (basescan), for "view your rounds" links.
+export const TALLY_EXPLORER = TALLY_CHAIN.blockExplorers?.default.url ?? 'https://basescan.org';
+
 // Local override for testing without editing code:
 //   localStorage.setItem('merge-sip-tally-address', '0x...')
 const addrOverride = ls('merge-sip-tally-address');
