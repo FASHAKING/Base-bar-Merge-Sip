@@ -73,6 +73,9 @@ const SPAWN_WEIGHTS = [28, 24, 18, 13, 9]; // tiers 0..4, always available
 const BEST_KEY = 'merge-sip-best';
 // Widest the stage may get relative to window height (phone-portrait feel).
 const MAX_STAGE_AR = 0.62;
+// Cap GPU work on small / low-memory devices while keeping crisp art on high-end screens.
+const MAX_DPR = navigator.hardwareConcurrency <= 4 ? 1.5 : 2;
+const LOW_EFFECTS = navigator.hardwareConcurrency <= 4;
 // Chain merges within this window multiply points (capped at COMBO_MAX).
 const COMBO_WINDOW = 2.2;
 const COMBO_MAX = 5;
@@ -168,7 +171,7 @@ export class Game {
   // ---------------------------------------------------------------- layout
 
   private resize(): void {
-    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
     const w = window.innerWidth;
     const h = window.innerHeight;
     this.canvas.width = Math.round(w * dpr);
@@ -583,7 +586,8 @@ export class Game {
   }
 
   private burst(x: number, y: number, color: string, r: number): void {
-    for (let i = 0; i < 14; i++) {
+    const count = LOW_EFFECTS ? 8 : 14;
+    for (let i = 0; i < count; i++) {
       const a = Math.random() * Math.PI * 2;
       const sp = 60 + Math.random() * 200;
       this.particles.push({
@@ -714,14 +718,14 @@ export class Game {
     const { fullW, H } = this;
     // covers the whole window, including the letterbox gutters on wide screens
     const g = ctx.createLinearGradient(0, 0, 0, H);
-    g.addColorStop(0, '#6cc4ea');
-    g.addColorStop(0.28, '#a5e1f5');
-    g.addColorStop(0.42, '#dbf2fa');
-    g.addColorStop(0.455, '#2e8fc7');
-    g.addColorStop(0.5, '#57b3de');
+    g.addColorStop(0, '#04a8f4');
+    g.addColorStop(0.24, '#31c5ff');
+    g.addColorStop(0.42, '#dff8ff');
+    g.addColorStop(0.455, '#0099da');
+    g.addColorStop(0.5, '#12bced');
     g.addColorStop(0.515, '#fdf3d5');
-    g.addColorStop(0.55, '#f7e2b0');
-    g.addColorStop(1, '#e8ca86');
+    g.addColorStop(0.55, '#ffe8ad');
+    g.addColorStop(1, '#edbd66');
     ctx.fillStyle = g;
     ctx.fillRect(0, 0, fullW, H);
 
@@ -743,11 +747,14 @@ export class Game {
 
     // drifting clouds
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
-    for (const [speed, y, s, off] of [
-      [9, 0.08, 1.0, 0],
-      [14, 0.16, 0.7, 500],
-      [6, 0.24, 1.25, 900],
-    ]) {
+    const clouds = LOW_EFFECTS
+      ? [[9, 0.08, 1.0, 0] as const]
+      : ([
+          [9, 0.08, 1.0, 0],
+          [14, 0.16, 0.7, 500],
+          [6, 0.24, 1.25, 900],
+        ] as const);
+    for (const [speed, y, s, off] of clouds) {
       const span = fullW + 360;
       const x = ((this.time * speed + off) % span) - 180;
       this.cloud(ctx, x, H * y, this.W * 0.055 * s);
@@ -755,9 +762,10 @@ export class Game {
 
     // sea: animated crest lines on the water band
     const seaTop = H * 0.455;
+    if (LOW_EFFECTS) ctx.globalAlpha = 0.75;
     ctx.strokeStyle = 'rgba(255,255,255,0.5)';
     ctx.lineWidth = 2;
-    for (let band = 0; band < 2; band++) {
+    for (let band = 0; band < (LOW_EFFECTS ? 1 : 2); band++) {
       const y0 = seaTop + band * H * 0.022 + H * 0.008;
       ctx.beginPath();
       for (let x = 0; x <= fullW; x += 14) {
@@ -768,6 +776,7 @@ export class Game {
       }
       ctx.stroke();
     }
+    ctx.globalAlpha = 1;
 
     // palm trees in the letterbox gutters on wide screens
     if (this.offX > 130) {
@@ -850,9 +859,9 @@ export class Game {
 
     roundRect(ctx, frame.x, frame.y, frame.w, frame.h, 14);
     const wood = ctx.createLinearGradient(frame.x, frame.y, frame.x + frame.w, frame.y);
-    wood.addColorStop(0, '#a8672f');
-    wood.addColorStop(0.5, '#c07d3e');
-    wood.addColorStop(1, '#a8672f');
+    wood.addColorStop(0, '#8f4c14');
+    wood.addColorStop(0.5, '#c87225');
+    wood.addColorStop(1, '#8f4c14');
     ctx.fillStyle = wood;
     ctx.fill();
 
@@ -878,16 +887,16 @@ export class Game {
     // sand surface
     roundRect(ctx, inner.x, inner.y, inner.w, inner.h, 10);
     const sand = ctx.createLinearGradient(0, inner.y, 0, inner.y + inner.h);
-    sand.addColorStop(0, '#f3e0b8');
-    sand.addColorStop(0.5, '#f9ecd0');
-    sand.addColorStop(1, '#f1dcb0');
+    sand.addColorStop(0, '#fff2ca');
+    sand.addColorStop(0.5, '#fff8df');
+    sand.addColorStop(1, '#f7dda4');
     ctx.fillStyle = sand;
     ctx.fill();
     ctx.save();
     ctx.clip();
 
-    // fine sand grain (deterministic scatter)
-    for (let i = 0; i < 60; i++) {
+    // fine sand grain (deterministic scatter); trimmed on slower devices.
+    for (let i = 0; i < (LOW_EFFECTS ? 24 : 60); i++) {
       const fx = ((i * 2654435761) % 1000) / 1000;
       const fy = ((i * 1597334677) % 1000) / 1000;
       ctx.beginPath();
@@ -1164,8 +1173,8 @@ export class Game {
     ctx.shadowOffsetY = 4;
     roundRect(ctx, 8, y, this.W - 16, barH, barH / 2);
     const barG = ctx.createLinearGradient(0, y, 0, y + barH);
-    barG.addColorStop(0, 'rgba(146, 92, 44, 0.92)');
-    barG.addColorStop(1, 'rgba(104, 61, 25, 0.92)');
+    barG.addColorStop(0, 'rgba(159, 84, 22, 0.96)');
+    barG.addColorStop(1, 'rgba(92, 47, 11, 0.96)');
     ctx.fillStyle = barG;
     ctx.fill();
     ctx.restore();

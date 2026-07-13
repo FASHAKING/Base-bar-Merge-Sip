@@ -28,15 +28,15 @@ export interface DrinkDef {
 
 export const DRINKS: DrinkDef[] = [
   { name: 'Cola Pop',         liquid: '#7a4a2a', liquidEdge: '#3b2417', rim: '#e8f4ff', shape: 'shot',      radiusFrac: 0.048, score: 10 },
-  { name: 'Lemon Fizz',       liquid: '#ffe66d', liquidEdge: '#e0a92e', rim: '#ffffff', shape: 'tumbler',   radiusFrac: 0.056, score: 20 },
-  { name: 'Lime Cooler',      liquid: '#a8e05f', liquidEdge: '#5da32b', rim: '#f0fff0', shape: 'tall',      radiusFrac: 0.064, score: 40 },
-  { name: 'Pink Punch',       liquid: '#ff8fc7', liquidEdge: '#d8478f', rim: '#fff0f7', shape: 'coupe',     radiusFrac: 0.073, score: 80 },
-  { name: 'Orange Sunrise',   liquid: '#ffb347', liquidEdge: '#e86f18', rim: '#fff7ec', shape: 'hurricane', radiusFrac: 0.082, score: 150 },
-  { name: 'Blueberry Breeze', liquid: '#6d8dff', liquidEdge: '#3450cc', rim: '#eef2ff', shape: 'highball',  radiusFrac: 0.092, score: 250 },
-  { name: 'Mojito Royale',    liquid: '#7fe3c0', liquidEdge: '#2ba379', rim: '#f0fffa', shape: 'mojito',    radiusFrac: 0.102, score: 400 },
-  { name: 'Berry Colada',     liquid: '#c77dff', liquidEdge: '#8339cc', rim: '#f9f0ff', shape: 'tulip',     radiusFrac: 0.113, score: 650 },
-  { name: 'Sunset Slush',     liquid: '#ffd166', liquidEdge: '#e43d3b', rim: '#fff1ec', shape: 'sunset',    radiusFrac: 0.124, score: 1000 },
-  { name: 'Legendary Tiki',   liquid: '#ffd166', liquidEdge: '#e08c00', rim: '#fff8d6', shape: 'tiki',      radiusFrac: 0.137, score: 2000 },
+  { name: 'Lemon Fizz',       liquid: '#ffd21f', liquidEdge: '#f38b00', rim: '#ffffff', shape: 'tumbler',   radiusFrac: 0.056, score: 20 },
+  { name: 'Lime Cooler',      liquid: '#5fe21e', liquidEdge: '#18a526', rim: '#f0fff0', shape: 'tall',      radiusFrac: 0.064, score: 40 },
+  { name: 'Pink Punch',       liquid: '#ff4fb5', liquidEdge: '#d7197d', rim: '#fff0f7', shape: 'coupe',     radiusFrac: 0.073, score: 80 },
+  { name: 'Orange Sunrise',   liquid: '#ff8b18', liquidEdge: '#ff3131', rim: '#fff7ec', shape: 'hurricane', radiusFrac: 0.082, score: 150 },
+  { name: 'Blueberry Breeze', liquid: '#2857ff', liquidEdge: '#1731c9', rim: '#eef2ff', shape: 'highball',  radiusFrac: 0.092, score: 250 },
+  { name: 'Mojito Royale',    liquid: '#1bd7aa', liquidEdge: '#008a66', rim: '#f0fffa', shape: 'mojito',    radiusFrac: 0.102, score: 400 },
+  { name: 'Berry Colada',     liquid: '#9b26ff', liquidEdge: '#5e18c9', rim: '#f9f0ff', shape: 'tulip',     radiusFrac: 0.113, score: 650 },
+  { name: 'Sunset Slush',     liquid: '#ffcc28', liquidEdge: '#ff1f2d', rim: '#fff1ec', shape: 'sunset',    radiusFrac: 0.124, score: 1000 },
+  { name: 'Legendary Tiki',   liquid: '#ffcc28', liquidEdge: '#e08c00', rim: '#fff8d6', shape: 'tiki',      radiusFrac: 0.137, score: 2000 },
 ];
 
 export const MAX_TIER = DRINKS.length - 1;
@@ -62,7 +62,7 @@ export function drawWild(
   // soft shadow under the base
   ctx.beginPath();
   ctx.ellipse(0, r * 0.98, r * 0.85, r * 0.22, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(90, 60, 20, 0.2)';
+  ctx.fillStyle = 'rgba(90, 60, 20, 0.24)';
   ctx.fill();
 
   // pulsing rainbow glow so it reads as special at a glance
@@ -95,8 +95,8 @@ export function drawWild(
   steel.addColorStop(1, '#96a2b4');
   ctx.fillStyle = steel;
   ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-  ctx.lineWidth = Math.max(1.2, r * 0.07);
+  ctx.strokeStyle = 'rgba(255,255,255,0.96)';
+  ctx.lineWidth = Math.max(1.5, r * 0.09);
   ctx.stroke();
 
   // rainbow band around the middle
@@ -104,7 +104,7 @@ export function drawWild(
   ctx.clip();
   const bandY = r * 0.18;
   const bandH = r * 0.3;
-  const colors = ['#ff6b6b', '#ffb347', '#ffe66d', '#7fe3c0', '#6d8dff', '#c77dff'];
+  const colors = ['#ff6b6b', '#ff8b18', '#ffd21f', '#1bd7aa', '#2857ff', '#9b26ff'];
   const bw = (botW * 2) / colors.length;
   for (let i = 0; i < colors.length; i++) {
     ctx.fillStyle = colors[(i + Math.floor(time * 3)) % colors.length];
@@ -160,7 +160,7 @@ export function drawDrink(
   // soft shadow under the base
   ctx.beginPath();
   ctx.ellipse(0, r * 0.98, r * 0.85, r * 0.22, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(90, 60, 20, 0.2)';
+  ctx.fillStyle = 'rgba(90, 60, 20, 0.24)';
   ctx.fill();
 
   // legendary glow
@@ -183,7 +183,7 @@ export function drawDrink(
     case 'highball':  tumblerGlass(ctx, r, d, 1.2, 1.0, 2.05, -0.45); break;
     case 'mojito':    tumblerGlass(ctx, r, d, 1.3, 0.95, 2.0, -0.42); break;
     case 'tulip':     tulipGlass(ctx, r, d); break;
-    case 'sunset':    hurricaneGlass(ctx, r, d, ['#ffd166', '#ff7e5f', '#e43d3b']); break;
+    case 'sunset':    hurricaneGlass(ctx, r, d, ['#ffcc28', '#ff7e5f', '#ff1f2d']); break;
     case 'tiki':      tikiMug(ctx, r, d); break;
   }
 
@@ -235,15 +235,15 @@ function shine(
   ctx.beginPath();
   ctx.moveTo(xAtTop, top);
   ctx.quadraticCurveTo((xAtTop + xAtBottom) / 2 - r * 0.06, (top + bottom) / 2, xAtBottom, bottom);
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-  ctx.lineWidth = Math.max(1.2, r * 0.09);
+  ctx.strokeStyle = 'rgba(255,255,255,0.78)';
+  ctx.lineWidth = Math.max(1.5, r * 0.11);
   ctx.lineCap = 'round';
   ctx.stroke();
 }
 
 function outline(ctx: CanvasRenderingContext2D, r: number): void {
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-  ctx.lineWidth = Math.max(1.2, r * 0.07);
+  ctx.strokeStyle = 'rgba(255,255,255,0.96)';
+  ctx.lineWidth = Math.max(1.5, r * 0.09);
   ctx.stroke();
 }
 
@@ -483,7 +483,7 @@ function drawGarnish(ctx: CanvasRenderingContext2D, tier: number, r: number): vo
     case 9: // the works: star pick, umbrella, cherries, mint
       pick(ctx, 0, -r * 0.9, r * 0.45);
       star(ctx, 0, -r * 1.35, r * 0.26, '#fff3b0', '#f4a300');
-      umbrella(ctx, r * 0.55, -r * 1.1, r * 0.55, '#e63946', '#ffd166');
+      umbrella(ctx, r * 0.55, -r * 1.1, r * 0.55, '#e63946', '#ffcc28');
       cherry(ctx, -r * 0.45, -r * 0.98, r * 0.16);
       cherry(ctx, -r * 0.65, -r * 0.82, r * 0.13);
       mint(ctx, -r * 0.15, -r * 1.0, r * 0.24);
