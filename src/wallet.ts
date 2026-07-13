@@ -218,118 +218,168 @@ export async function refreshLeaderboard(state: OnchainState): Promise<void> {
   }
 }
 
-// ------------------------------------------------------------- weekly board
+// ----------------------------------------------------------- event boards
 //
-// The contract only stores the all-time top 10, so "this week" is rebuilt
-// client-side from ScoreServed events. Scanned block ranges are cached in
-// localStorage so subsequent opens only fetch the delta.
+// The contract only stores the all-time top 10, so the full leaderboard
+// (every player, scrollable) and the weekly view are rebuilt client-side
+// from ScoreServed events since the deploy block. Scanned ranges are cached
+// in localStorage so subsequent opens only fetch the delta, and usernames
+// resolve through multicall with their own cache.
 
 const scoreServedEvent = parseAbiItem(
   'event ScoreServed(address indexed player, uint256 score, uint8 tier, uint256 totalServed)',
 );
-const WEEKLY_CACHE_KEY = 'merge-sip-weekly';
+const HISTORY_CACHE_KEY = 'merge-sip-history';
+const NAMES_CACHE_KEY = 'merge-sip-names';
 const LOG_CHUNK = 10_000n; // public-RPC friendly getLogs range
 
-interface WeeklyCache {
+type ServedEvent = [player: string, score: string, tier: number, block: string];
+
+interface HistoryCache {
   to: string; // last block scanned (inclusive)
-  events: [player: string, score: string, tier: number, block: string][];
+  events: ServedEvent[];
 }
 
-function readWeeklyCache(): WeeklyCache | null {
+function readHistoryCache(): HistoryCache | null {
   try {
-    const raw = localStorage.getItem(WEEKLY_CACHE_KEY);
+    const raw = localStorage.getItem(HISTORY_CACHE_KEY);
     if (!raw) return null;
-    const v = JSON.parse(raw) as WeeklyCache;
+    const v = JSON.parse(raw) as HistoryCache;
     return typeof v.to === 'string' && Array.isArray(v.events) ? v : null;
   } catch {
     return null;
   }
 }
 
-export async function refreshWeekly(state: OnchainState): Promise<void> {
+/** All ScoreServed events since deploy (cached; only the delta is fetched). */
+async function scanHistory(): Promise<{ events: ServedEvent[]; latest: bigint } | null> {
+  const client = getPublicClient(config, { chainId: TALLY_CHAIN.id });
+  if (!client) return null;
+  const latest = await client.getBlockNumber();
+
+  // local/test chains have tiny block numbers — scan from genesis there
+  const deployStart = TALLY_DEPLOY_BLOCK > latest ? 0n : TALLY_DEPLOY_BLOCK;
+  const cache = readHistoryCache();
+  const events: ServedEvent[] = cache ? [...cache.events] : [];
+  let from = cache ? BigInt(cache.to) + 1n : deployStart;
+
+  while (from <= latest) {
+    const to = from + LOG_CHUNK - 1n > latest ? latest : from + LOG_CHUNK - 1n;
+    const logs = await client.getLogs({
+      address: TALLY_ADDRESS,
+      event: scoreServedEvent,
+      fromBlock: from,
+      toBlock: to,
+    });
+    for (const log of logs) {
+      if (log.args.player && log.args.score !== undefined) {
+        events.push([
+          log.args.player,
+          log.args.score.toString(),
+          Number(log.args.tier ?? 0),
+          (log.blockNumber ?? to).toString(),
+        ]);
+      }
+    }
+    from = to + 1n;
+  }
+
+  try {
+    localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify({ to: latest.toString(), events }));
+  } catch {
+    /* cache is an optimization only */
+  }
+  return { events, latest };
+}
+
+/** Best run per player, sorted descending. */
+function rank(events: ServedEvent[]): [string, { score: bigint; tier: number }][] {
+  const best = new Map<string, { score: bigint; tier: number }>();
+  for (const [player, score, tier] of events) {
+    const key = player.toLowerCase();
+    const s = BigInt(score);
+    const cur = best.get(key);
+    if (!cur || s > cur.score) best.set(key, { score: s, tier });
+  }
+  return [...best.entries()].sort((a, b) =>
+    b[1].score > a[1].score ? 1 : b[1].score < a[1].score ? -1 : 0,
+  );
+}
+
+/** Usernames for a set of players: contract top-10 first, then a cached multicall. */
+async function resolveNames(
+  players: string[],
+  state: OnchainState,
+): Promise<Map<string, string>> {
+  const names = new Map<string, string>();
+  for (const e of state.leaderboard ?? []) names.set(e.player.toLowerCase(), e.name);
+
+  let cache: Record<string, string> = {};
+  try {
+    cache = JSON.parse(localStorage.getItem(NAMES_CACHE_KEY) ?? '{}') as Record<string, string>;
+  } catch {
+    /* corrupted cache */
+  }
+
+  const missing = players.filter((p) => !names.has(p) && !(p in cache));
+  if (missing.length > 0) {
+    try {
+      const client = getPublicClient(config, { chainId: TALLY_CHAIN.id });
+      const results = await client!.multicall({
+        contracts: missing.map((p) => ({
+          address: TALLY_ADDRESS,
+          abi: tallyAbi,
+          functionName: 'usernameOf' as const,
+          args: [p as `0x${string}`],
+        })),
+        allowFailure: true,
+      });
+      results.forEach((r, i) => {
+        cache[missing[i]] = r.status === 'success' ? (r.result as string) : '';
+      });
+      try {
+        localStorage.setItem(NAMES_CACHE_KEY, JSON.stringify(cache));
+      } catch {
+        /* best effort */
+      }
+    } catch (e) {
+      console.warn('[merge-sip] name multicall failed:', e);
+    }
+  }
+
+  for (const p of players) {
+    if (!names.has(p)) names.set(p, cache[p] ?? '');
+  }
+  return names;
+}
+
+/** Rebuild the full (all players) and weekly boards from events. */
+export async function refreshBoards(state: OnchainState): Promise<void> {
   if (state.weeklyLoading) return;
   state.weeklyLoading = true;
   try {
-    const client = getPublicClient(config, { chainId: TALLY_CHAIN.id });
-    if (!client) return;
-    const latest = await client.getBlockNumber();
-    const windowStart =
-      latest > TALLY_DEPLOY_BLOCK + WEEK_OF_BLOCKS ? latest - WEEK_OF_BLOCKS : TALLY_DEPLOY_BLOCK;
+    const scan = await scanHistory();
+    if (!scan) return;
+    const { events, latest } = scan;
 
-    // reuse the cached scan when it overlaps this week's window
-    const cache = readWeeklyCache();
-    const cachedTo = cache ? BigInt(cache.to) : -1n;
-    const events: WeeklyCache['events'] =
-      cache && cachedTo >= windowStart
-        ? cache.events.filter((e) => BigInt(e[3]) >= windowStart)
-        : [];
-    let from = cache && cachedTo >= windowStart ? cachedTo + 1n : windowStart;
+    const start = TALLY_DEPLOY_BLOCK > latest ? 0n : TALLY_DEPLOY_BLOCK;
+    const windowStart = latest > start + WEEK_OF_BLOCKS ? latest - WEEK_OF_BLOCKS : start;
+    const fullRanked = rank(events);
+    const weeklyRanked = rank(events.filter((e) => BigInt(e[3]) >= windowStart)).slice(0, 10);
 
-    while (from <= latest) {
-      const to = from + LOG_CHUNK - 1n > latest ? latest : from + LOG_CHUNK - 1n;
-      const logs = await client.getLogs({
-        address: TALLY_ADDRESS,
-        event: scoreServedEvent,
-        fromBlock: from,
-        toBlock: to,
-      });
-      for (const log of logs) {
-        if (log.args.player && log.args.score !== undefined) {
-          events.push([
-            log.args.player,
-            log.args.score.toString(),
-            Number(log.args.tier ?? 0),
-            (log.blockNumber ?? to).toString(),
-          ]);
-        }
-      }
-      from = to + 1n;
-    }
+    const players = [...new Set([...fullRanked, ...weeklyRanked].map(([p]) => p))];
+    const names = await resolveNames(players, state);
 
-    try {
-      localStorage.setItem(WEEKLY_CACHE_KEY, JSON.stringify({ to: latest.toString(), events }));
-    } catch {
-      /* cache is an optimization only */
-    }
-
-    // best score per player inside the window
-    const best = new Map<string, { score: bigint; tier: number }>();
-    for (const [player, score, tier] of events) {
-      const key = player.toLowerCase();
-      const s = BigInt(score);
-      const cur = best.get(key);
-      if (!cur || s > cur.score) best.set(key, { score: s, tier });
-    }
-    const top = [...best.entries()]
-      .sort((a, b) => (b[1].score > a[1].score ? 1 : b[1].score < a[1].score ? -1 : 0))
-      .slice(0, 10);
-
-    // usernames: reuse the all-time board's, fetch the rest
-    const known = new Map(
-      (state.leaderboard ?? []).map((e) => [e.player.toLowerCase(), e.name]),
-    );
-    const entries = await Promise.all(
-      top.map(async ([player, v]): Promise<LeaderboardEntry> => {
-        let name = known.get(player) ?? '';
-        if (!name) {
-          try {
-            name = await readContract(config, {
-              address: TALLY_ADDRESS,
-              abi: tallyAbi,
-              functionName: 'usernameOf',
-              args: [player as `0x${string}`],
-              chainId: TALLY_CHAIN.id,
-            });
-          } catch {
-            /* fall back to the address */
-          }
-        }
-        return { player: player as `0x${string}`, score: v.score, tier: v.tier, name };
-      }),
-    );
-    state.weekly = entries;
+    const toEntry = ([player, v]: (typeof fullRanked)[number]): LeaderboardEntry => ({
+      player: player as `0x${string}`,
+      score: v.score,
+      tier: v.tier,
+      name: names.get(player) ?? '',
+    });
+    state.fullBoard = fullRanked.map(toEntry);
+    state.weekly = weeklyRanked.map(toEntry);
   } catch (e) {
-    console.warn('[merge-sip] weekly board scan failed:', e);
+    console.warn('[merge-sip] board scan failed:', e);
     /* keep the previous view */
   } finally {
     state.weeklyLoading = false;

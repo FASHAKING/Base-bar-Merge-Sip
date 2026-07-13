@@ -264,13 +264,13 @@ function setBoardView(view: 'all' | 'week'): void {
   boardView = view;
   $('tab-all').classList.toggle('active', view === 'all');
   $('tab-week').classList.toggle('active', view === 'week');
-  if (view === 'week') onchain.refreshWeekly();
+  onchain.refreshBoards();
   renderBoard();
 }
 
 export function showLeaderboard(): void {
   onchain.refreshLeaderboard();
-  if (boardView === 'week') onchain.refreshWeekly();
+  onchain.refreshBoards();
   $('board').hidden = false;
   renderBoard();
 }
@@ -318,14 +318,18 @@ function render(): void {
 function renderBoard(): void {
   const s = onchain.state;
   const list = $('board-list');
+  const rankLine = $('board-rank');
   list.innerHTML = '';
+  rankLine.hidden = true;
 
   if (!s.enabled) {
     list.innerHTML = '<li class="empty">Leaderboard goes live once the contract is deployed</li>';
     return;
   }
-  const board = boardView === 'week' ? s.weekly : s.leaderboard;
-  const loading = boardView === 'week' ? s.weeklyLoading : s.boardLoading;
+  // All-time prefers the full event-built board (every player, scrollable);
+  // the contract's onchain top 10 is the fallback while events load.
+  const board = boardView === 'week' ? s.weekly : (s.fullBoard ?? s.leaderboard);
+  const loading = boardView === 'week' ? s.weeklyLoading : s.weeklyLoading || s.boardLoading;
   if (board === null) {
     list.innerHTML = `<li class="empty">${loading ? 'Pouring the standings…' : 'Leaderboard unavailable — check your connection'}</li>`;
     return;
@@ -337,17 +341,29 @@ function renderBoard(): void {
         : '<li class="empty">No scores served yet — be the first! 🍹</li>';
     return;
   }
+
+  const me = s.address?.toLowerCase();
+  // your position, shown above the list
+  if (me && boardView === 'all' && s.fullBoard) {
+    const idx = s.fullBoard.findIndex((e) => e.player.toLowerCase() === me);
+    if (idx >= 0) {
+      rankLine.hidden = false;
+      rankLine.textContent = `Your position: #${idx + 1} of ${s.fullBoard.length} mixologists`;
+    }
+  }
+
   board.forEach((e, i) => {
     const li = document.createElement('li');
+    const isMe = me !== undefined && e.player.toLowerCase() === me;
+    if (i < 3) li.classList.add('podium');
+    if (isMe) li.classList.add('me');
     const rank = document.createElement('span');
     rank.className = 'rank';
     rank.textContent = ['🥇', '🥈', '🥉'][i] ?? `${i + 1}.`;
     const who = document.createElement('span');
     who.className = 'who';
     who.textContent = e.name ? `@${e.name}` : `${e.player.slice(0, 6)}…${e.player.slice(-4)}`;
-    if (onchain.state.address && e.player.toLowerCase() === onchain.state.address.toLowerCase()) {
-      who.textContent += ' (you)';
-    }
+    if (isMe) who.textContent += ' (you)';
     const pts = document.createElement('span');
     pts.className = 'pts';
     pts.textContent = e.score.toLocaleString();

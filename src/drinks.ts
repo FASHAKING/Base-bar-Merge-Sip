@@ -27,16 +27,16 @@ export interface DrinkDef {
 }
 
 export const DRINKS: DrinkDef[] = [
-  { name: 'Cola Pop',         liquid: '#7a4a2a', liquidEdge: '#3b2417', rim: '#e8f4ff', shape: 'shot',      radiusFrac: 0.048, score: 10 },
-  { name: 'Lemon Fizz',       liquid: '#ffe66d', liquidEdge: '#e0a92e', rim: '#ffffff', shape: 'tumbler',   radiusFrac: 0.056, score: 20 },
-  { name: 'Lime Cooler',      liquid: '#a8e05f', liquidEdge: '#5da32b', rim: '#f0fff0', shape: 'tall',      radiusFrac: 0.064, score: 40 },
-  { name: 'Pink Punch',       liquid: '#ff8fc7', liquidEdge: '#d8478f', rim: '#fff0f7', shape: 'coupe',     radiusFrac: 0.073, score: 80 },
-  { name: 'Orange Sunrise',   liquid: '#ffb347', liquidEdge: '#e86f18', rim: '#fff7ec', shape: 'hurricane', radiusFrac: 0.082, score: 150 },
-  { name: 'Blueberry Breeze', liquid: '#6d8dff', liquidEdge: '#3450cc', rim: '#eef2ff', shape: 'highball',  radiusFrac: 0.092, score: 250 },
-  { name: 'Mojito Royale',    liquid: '#7fe3c0', liquidEdge: '#2ba379', rim: '#f0fffa', shape: 'mojito',    radiusFrac: 0.102, score: 400 },
-  { name: 'Berry Colada',     liquid: '#c77dff', liquidEdge: '#8339cc', rim: '#f9f0ff', shape: 'tulip',     radiusFrac: 0.113, score: 650 },
-  { name: 'Sunset Slush',     liquid: '#ffd166', liquidEdge: '#e43d3b', rim: '#fff1ec', shape: 'sunset',    radiusFrac: 0.124, score: 1000 },
-  { name: 'Legendary Tiki',   liquid: '#ffd166', liquidEdge: '#e08c00', rim: '#fff8d6', shape: 'tiki',      radiusFrac: 0.137, score: 2000 },
+  { name: 'Cola Pop',         liquid: '#8a4a22', liquidEdge: '#42200c', rim: '#e8f4ff', shape: 'shot',      radiusFrac: 0.048, score: 10 },
+  { name: 'Lemon Fizz',       liquid: '#ffd93b', liquidEdge: '#f09c00', rim: '#ffffff', shape: 'tumbler',   radiusFrac: 0.056, score: 20 },
+  { name: 'Lime Cooler',      liquid: '#97e042', liquidEdge: '#4a9e14', rim: '#f0fff0', shape: 'tall',      radiusFrac: 0.064, score: 40 },
+  { name: 'Pink Punch',       liquid: '#ff7ec2', liquidEdge: '#e6308f', rim: '#fff0f7', shape: 'coupe',     radiusFrac: 0.073, score: 80 },
+  { name: 'Orange Sunrise',   liquid: '#ffa22e', liquidEdge: '#f25505', rim: '#fff7ec', shape: 'hurricane', radiusFrac: 0.082, score: 150 },
+  { name: 'Blueberry Breeze', liquid: '#5a7cff', liquidEdge: '#2338cf', rim: '#eef2ff', shape: 'highball',  radiusFrac: 0.092, score: 250 },
+  { name: 'Mojito Royale',    liquid: '#4fe0ac', liquidEdge: '#0d9e6b', rim: '#f0fffa', shape: 'mojito',    radiusFrac: 0.102, score: 400 },
+  { name: 'Berry Colada',     liquid: '#bb5fff', liquidEdge: '#7a1fd6', rim: '#f9f0ff', shape: 'tulip',     radiusFrac: 0.113, score: 650 },
+  { name: 'Sunset Slush',     liquid: '#ffd94d', liquidEdge: '#e6252b', rim: '#fff1ec', shape: 'sunset',    radiusFrac: 0.124, score: 1000 },
+  { name: 'Legendary Tiki',   liquid: '#ffcc33', liquidEdge: '#e08600', rim: '#fff8d6', shape: 'tiki',      radiusFrac: 0.137, score: 2000 },
 ];
 
 export const MAX_TIER = DRINKS.length - 1;
@@ -157,11 +157,19 @@ export function drawDrink(
   ctx.translate(x, y);
   if (wobble) ctx.rotate(wobble);
 
-  // soft shadow under the base
+  // soft radial shadow under the base (fades at the edges — reads as HD)
+  ctx.save();
+  ctx.translate(0, r * 0.98);
+  ctx.scale(1, 0.28);
+  const shadow = ctx.createRadialGradient(0, 0, 0, 0, 0, r * 0.95);
+  shadow.addColorStop(0, 'rgba(90, 55, 15, 0.3)');
+  shadow.addColorStop(0.7, 'rgba(90, 55, 15, 0.14)');
+  shadow.addColorStop(1, 'rgba(90, 55, 15, 0)');
   ctx.beginPath();
-  ctx.ellipse(0, r * 0.98, r * 0.85, r * 0.22, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(90, 60, 20, 0.2)';
+  ctx.arc(0, 0, r * 0.95, 0, Math.PI * 2);
+  ctx.fillStyle = shadow;
   ctx.fill();
+  ctx.restore();
 
   // legendary glow
   if (tier === MAX_TIER) {
@@ -183,7 +191,7 @@ export function drawDrink(
     case 'highball':  tumblerGlass(ctx, r, d, 1.2, 1.0, 2.05, -0.45); break;
     case 'mojito':    tumblerGlass(ctx, r, d, 1.3, 0.95, 2.0, -0.42); break;
     case 'tulip':     tulipGlass(ctx, r, d); break;
-    case 'sunset':    hurricaneGlass(ctx, r, d, ['#ffd166', '#ff7e5f', '#e43d3b']); break;
+    case 'sunset':    hurricaneGlass(ctx, r, d, ['#ffd94d', '#ff7043', '#e6252b']); break;
     case 'tiki':      tikiMug(ctx, r, d); break;
   }
 
@@ -214,13 +222,13 @@ function glassFinish(
   // rim
   ctx.beginPath();
   ctx.ellipse(0, top, topW, topW * 0.16, 0, 0, Math.PI * 2);
-  ctx.strokeStyle = 'rgba(255,255,255,0.95)';
-  ctx.lineWidth = Math.max(1.2, r * 0.06);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(1.6, r * 0.09);
   ctx.stroke();
   // liquid surface sheen
   ctx.beginPath();
   ctx.ellipse(0, top + r * 0.06, topW * 0.82, topW * 0.13, 0, 0, Math.PI * 2);
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
+  ctx.fillStyle = 'rgba(255,255,255,0.45)';
   ctx.fill();
 }
 
@@ -235,15 +243,17 @@ function shine(
   ctx.beginPath();
   ctx.moveTo(xAtTop, top);
   ctx.quadraticCurveTo((xAtTop + xAtBottom) / 2 - r * 0.06, (top + bottom) / 2, xAtBottom, bottom);
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-  ctx.lineWidth = Math.max(1.2, r * 0.09);
+  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
+  ctx.lineWidth = Math.max(1.6, r * 0.11);
   ctx.lineCap = 'round';
   ctx.stroke();
 }
 
+/** Chunky white sticker-style outline — makes every glass pop off the sand. */
 function outline(ctx: CanvasRenderingContext2D, r: number): void {
-  ctx.strokeStyle = 'rgba(255,255,255,0.85)';
-  ctx.lineWidth = Math.max(1.2, r * 0.07);
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = Math.max(2, r * 0.13);
+  ctx.lineJoin = 'round';
   ctx.stroke();
 }
 
@@ -377,12 +387,13 @@ function tikiMug(ctx: CanvasRenderingContext2D, r: number, d: DrinkDef): void {
   ctx.bezierCurveTo(topW * 1.05, r * 0.5, topW * 1.25, -r * 0.1, topW, topY);
   ctx.closePath();
   const wood = ctx.createLinearGradient(0, topY, 0, botY);
-  wood.addColorStop(0, '#a9713a');
+  wood.addColorStop(0, '#b0773d');
   wood.addColorStop(1, '#6f4320');
   ctx.fillStyle = wood;
   ctx.fill();
+  outline(ctx, r);
   ctx.strokeStyle = '#f4d06f';
-  ctx.lineWidth = Math.max(1.5, r * 0.08);
+  ctx.lineWidth = Math.max(1.5, r * 0.06);
   ctx.stroke();
 
   // carved face: brows, eyes, zigzag mouth
