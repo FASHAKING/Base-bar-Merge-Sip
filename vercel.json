@@ -1,0 +1,16 @@
+{
+  "redirects": [
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "baseapp.mergesip.xyz" }],
+      "destination": "https://go.cb-w.com/dapp?cb_url=https%3A%2F%2Fmergesip.xyz",
+      "permanent": false
+    },
+    {
+      "source": "/:path*",
+      "has": [{ "type": "host", "value": "miniapp.mergesip.xyz" }],
+      "destination": "https://farcaster.xyz/miniapps/HIM7nRbSW9zD/merge-sip",
+      "permanent": false
+    }
+  ]
+}
