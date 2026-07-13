@@ -1,6 +1,6 @@
-// Regression for Codex PR#2 follow-up: when the badge cache is null (read
-// pending/failed), a below-best tier-5+ run must NOT auto-serve (no
-// unsolicited wallet prompt) but the manual save button MUST be tappable.
+// Every finished round auto-serves onchain (no tap): even a below-best,
+// non-milestone run fires serveScore so the global tally always grows. This
+// verifies that behavior with the badge cache null (read pending/failed).
 //
 // Self-contained: deploys a fresh DrinkTally so it is deterministic.
 import { chromium } from 'playwright';
@@ -133,20 +133,25 @@ await page.waitForTimeout(2500);
 await page.evaluate(() => { window.__onchain.badges = null; });
 await page.waitForTimeout(600);
 
+// wait for the auto-serve transaction to resolve
+for (let i = 0; i < 30; i++) {
+  await page.waitForTimeout(500);
+  const s = await page.evaluate(() => window.__onchain.status);
+  if (s === 'success' || s === 'error') break;
+}
 const res = await page.evaluate(() => ({
   status: window.__onchain.status,
-  serveBtnW: Math.round(window.__game.btnServe.w),
+  error: window.__onchain.error,
+  servedByMe: window.__onchain.servedByMe,
 }));
 console.log('null-badges below-best tier-6 run:', res);
 
-const autoServeSuppressed = res.status === 'idle';
-const buttonTappable = res.serveBtnW > 0;
-console.log('auto-serve suppressed (idle):', autoServeSuppressed);
-console.log('manual save button tappable:', buttonTappable);
+const autoServed = res.status === 'success' && res.servedByMe > 0;
+console.log('auto-served every round (success):', autoServed);
 console.log('errors:', errors.length ? errors : 'none');
 await browser.close();
-if (!autoServeSuppressed || !buttonTappable) {
+if (!autoServed) {
   console.error('FAIL');
   process.exit(1);
 }
-console.log('OK: conservative auto-serve + permissive button when badges unknown');
+console.log('OK: every finished round auto-serves onchain regardless of best/badge');

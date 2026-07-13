@@ -42,6 +42,8 @@ export interface OnchainState {
   badges: bigint | null; // milestone bitmask (bit N = tier-N first mixed)
   mintStatus: TxStatus; // mintScoreCard transaction state
   mintError: string | null;
+  servedByMe: number; // rounds this player has served onchain this session
+  lastServeTx: string | null; // hash of the most recent serveScore tx
 }
 
 export const state: OnchainState = {
@@ -65,6 +67,8 @@ export const state: OnchainState = {
   badges: null,
   mintStatus: 'idle',
   mintError: null,
+  servedByMe: 0,
+  lastServeTx: null,
 };
 
 type Impl = typeof import('./wallet.ts');

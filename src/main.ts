@@ -27,12 +27,29 @@ initUi({
   startDaily: () => game.setMode('daily'),
 });
 
+// While a fullscreen overlay (intro / leaderboard) covers the canvas, the
+// game is idle behind a blur — skip update+render to save battery and CPU,
+// but keep one frame painted underneath. The rAF keeps ticking cheaply.
+const intro = document.getElementById('intro') as HTMLElement;
+const board = document.getElementById('board') as HTMLElement;
+const overlayUp = (): boolean => !intro.hidden || !board.hidden;
+
 let last = performance.now();
+let paintedIdle = false;
 function loop(now: number): void {
   const dt = Math.min((now - last) / 1000, 0.05);
   last = now;
-  game.update(dt);
-  game.render();
+  if (overlayUp() && !document.hidden) {
+    // paint a single frame so the blurred backdrop isn't blank, then idle
+    if (!paintedIdle) {
+      game.render();
+      paintedIdle = true;
+    }
+  } else if (!document.hidden) {
+    paintedIdle = false;
+    game.update(dt);
+    game.render();
+  }
   requestAnimationFrame(loop);
 }
 requestAnimationFrame(loop);

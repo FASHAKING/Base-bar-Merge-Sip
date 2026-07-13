@@ -3,7 +3,8 @@
 
 import { DRINKS, MAX_TIER, drawDrink, drawWild, WILD_TIER, WILD_RADIUS_FRAC } from './drinks.ts';
 import { sfx } from './sfx.ts';
-import { haptic, shareScore } from './base.ts';
+import { haptic, shareScore, openExternal } from './base.ts';
+import { TALLY_EXPLORER } from './config/tally.ts';
 import * as onchain from './onchain.ts';
 import { showLeaderboard, getUsername } from './ui.ts';
 import { shareToX } from './share.ts';
@@ -88,6 +89,13 @@ export class Game {
   private fullW = 0; // real window width, for background/letterboxing
   private offX = 0; // horizontal offset centering the stage in the window
 
+  // pre-rendered static layers, rebuilt only on resize (see buildLayers).
+  // Blitting these each frame avoids re-running expensive gradients, 60
+  // sand-grain arcs, and a large shadowBlur every single frame.
+  private bgLayer: HTMLCanvasElement | null = null;
+  private boardLayer: HTMLCanvasElement | null = null;
+  private vignetteLayer: HTMLCanvasElement | null = null;
+
   // board geometry (CSS px)
   private inner: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private frame: Rect = { x: 0, y: 0, w: 0, h: 0 };
@@ -132,6 +140,7 @@ export class Game {
   private btnBoard: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private btnShareX: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private btnMint: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  private btnActivity: Rect = { x: 0, y: 0, w: 0, h: 0 };
 
   /** Personal best (this device), shown as the milestone to beat. */
   get bestScore(): number {
@@ -211,6 +220,28 @@ export class Game {
       }
     }
     this.aimX = this.inner.x + this.inner.w / 2;
+    this.buildLayers();
+  }
+
+  /** Bake the static scene layers to offscreen canvases (once per resize). */
+  private buildLayers(): void {
+    if (this.W <= 0 || this.H <= 0) return;
+    this.bgLayer = makeLayer(this.fullW, this.H, (c) => this.renderBackdropStatic(c));
+    this.boardLayer = makeLayer(this.W, this.H, (c) => this.renderBoardStatic(c));
+    this.vignetteLayer = makeLayer(this.fullW, this.H, (c) => {
+      const v = c.createRadialGradient(
+        this.fullW / 2,
+        this.H * 0.45,
+        Math.min(this.fullW, this.H) * 0.45,
+        this.fullW / 2,
+        this.H * 0.45,
+        Math.max(this.fullW, this.H) * 0.75,
+      );
+      v.addColorStop(0, 'rgba(70, 40, 10, 0)');
+      v.addColorStop(1, 'rgba(70, 40, 10, 0.14)');
+      c.fillStyle = v;
+      c.fillRect(0, 0, this.fullW, this.H);
+    });
   }
 
   private radius(tier: number): number {
@@ -304,6 +335,11 @@ export class Game {
         onchain.mintScoreCard();
       } else if (onchain.state.enabled && hit(this.btnServe, p)) {
         onchain.serveScore(this.score, this.maxTierMade);
+      } else if (onchain.state.enabled && hit(this.btnActivity, p) && onchain.state.address) {
+        const tx = onchain.state.lastServeTx;
+        openExternal(
+          tx ? `${TALLY_EXPLORER}/tx/${tx}` : `${TALLY_EXPLORER}/address/${onchain.state.address}`,
+        );
       } else if (onchain.state.enabled && hit(this.btnBoard, p)) {
         showLeaderboard();
       }
@@ -607,47 +643,28 @@ export class Game {
     sfx.gameOver();
     haptic('heavy');
 
-    // auto-serve: a connected player's run is saved without a button press
-    // (the wallet still asks for the signature) whenever the run beats their
-    // onchain best OR unlocks a new milestone badge. Conservative when the
-    // badge cache hasn't loaded — never fire an unsolicited wallet prompt on
-    // a guess.
+    // auto-serve every finished round onchain: the wallet prompt pops
+    // automatically (no button hunt). serveScore records any run — it always
+    // bumps the global tally and emits ScoreServed, updating bests/badges when
+    // earned — so every game the player finishes is a transaction they can see.
     const oc = onchain.state;
-    if (oc.enabled && oc.address && this.score > 0 && this.runWorthSaving(false)) {
+    if (oc.enabled && oc.address && this.score > 0) {
       onchain.serveScore(this.score, this.maxTierMade);
     }
-  }
-
-  /**
-   * Whether a finished run is worth writing onchain: it beats the player's
-   * onchain best, OR it may unlock a milestone badge (reached tier 5+ that
-   * isn't already earned).
-   *
-   * `assumeMilestoneWhenBadgesUnknown` decides the badge-cache-missing case:
-   * the manual save button passes `true` (user-initiated, and `serveScore`
-   * safely ignores already-earned badges, so don't block the save just
-   * because the read is pending/failed); auto-serve passes `false`.
-   */
-  private runWorthSaving(assumeMilestoneWhenBadgesUnknown: boolean): boolean {
-    const oc = onchain.state;
-    if (this.score > Number(oc.myBest ?? 0n)) return true;
-    if (this.maxTierMade >= 5) {
-      if (oc.badges === null) return assumeMilestoneWhenBadgesUnknown;
-      for (let t = 5; t <= this.maxTierMade; t++) {
-        if (((oc.badges >> BigInt(t)) & 1n) === 0n) return true;
-      }
-    }
-    return false;
   }
 
   // ---------------------------------------------------------------- render
 
   render(): void {
     const ctx = this.ctx;
-    this.drawBackground(ctx);
+    // static backdrop (sky/sun/gutter deco) + live sky animation on top
+    if (this.bgLayer) ctx.drawImage(this.bgLayer, 0, 0, this.fullW, this.H);
+    this.drawSkyAnimated(ctx);
     ctx.save();
     ctx.translate(this.offX, 0);
-    this.drawBoard(ctx);
+    // static board (frame/sand/grain) + the live danger line
+    if (this.boardLayer) ctx.drawImage(this.boardLayer, 0, 0, this.W, this.H);
+    this.drawDangerLine(ctx);
 
     // bodies (sorted so bigger drinks overlap smaller ones naturally)
     const sorted = [...this.bodies].sort((a, b) => a.y - b.y);
@@ -695,22 +712,12 @@ export class Game {
     if (this.state === 'over') this.drawGameOver(ctx);
     ctx.restore();
 
-    // gentle vignette pulls the eye to the middle of the scene
-    const v = ctx.createRadialGradient(
-      this.fullW / 2,
-      this.H * 0.45,
-      Math.min(this.fullW, this.H) * 0.45,
-      this.fullW / 2,
-      this.H * 0.45,
-      Math.max(this.fullW, this.H) * 0.75,
-    );
-    v.addColorStop(0, 'rgba(70, 40, 10, 0)');
-    v.addColorStop(1, 'rgba(70, 40, 10, 0.14)');
-    ctx.fillStyle = v;
-    ctx.fillRect(0, 0, this.fullW, this.H);
+    // gentle vignette (pre-rendered) pulls the eye to the middle of the scene
+    if (this.vignetteLayer) ctx.drawImage(this.vignetteLayer, 0, 0, this.fullW, this.H);
   }
 
-  private drawBackground(ctx: CanvasRenderingContext2D): void {
+  /** Static sky, sun, and gutter deco — baked into bgLayer once per resize. */
+  private renderBackdropStatic(ctx: CanvasRenderingContext2D): void {
     const { fullW, H } = this;
     // covers the whole window, including the letterbox gutters on wide screens
     const g = ctx.createLinearGradient(0, 0, 0, H);
@@ -746,6 +753,16 @@ export class Game {
     ctx.fillStyle = core;
     ctx.fill();
 
+    // static beach dressing in the gutters (palms are drawn live for sway)
+    if (this.offX > 130) {
+      this.starfish(ctx, this.offX * 0.25, H * 0.93, this.W * 0.022);
+      this.shell(ctx, fullW - this.offX * 0.3, H * 0.95, this.W * 0.02);
+    }
+  }
+
+  /** Moving sky elements drawn live each frame over the baked backdrop. */
+  private drawSkyAnimated(ctx: CanvasRenderingContext2D): void {
+    const { fullW, H } = this;
     // drifting clouds
     for (const [speed, y, s, off, alpha] of [
       [9, 0.08, 1.0, 0, 0.95],
@@ -793,12 +810,10 @@ export class Game {
     ctx.lineWidth = 3;
     ctx.stroke();
 
-    // beach dressing in the letterbox gutters on wide screens
+    // swaying palms in the letterbox gutters on wide screens
     if (this.offX > 130) {
       this.palm(ctx, this.offX * 0.45, H * 0.6, this.offX * 0.3, 1);
       this.palm(ctx, fullW - this.offX * 0.45, H * 0.64, this.offX * 0.26, -1);
-      this.starfish(ctx, this.offX * 0.25, H * 0.93, this.W * 0.022);
-      this.shell(ctx, fullW - this.offX * 0.3, H * 0.95, this.W * 0.02);
     }
   }
 
@@ -975,7 +990,8 @@ export class Game {
     ctx.restore();
   }
 
-  private drawBoard(ctx: CanvasRenderingContext2D): void {
+  /** Frame, sand, grain, doodles — baked into boardLayer once per resize. */
+  private renderBoardStatic(ctx: CanvasRenderingContext2D): void {
     const { frame, inner } = this;
 
     // drop shadow so the board sits above the beach
@@ -1057,12 +1073,19 @@ export class Game {
     innerShadow.addColorStop(1, 'rgba(90, 52, 16, 0)');
     ctx.fillStyle = innerShadow;
     ctx.fillRect(inner.x, inner.y, inner.w, 20);
+    ctx.restore(); // close the sand clip
+  }
 
-    // dashed danger line — pulses when the pile creeps close
+  /** Dashed danger line, drawn live — pulses red as the pile creeps up. */
+  private drawDangerLine(ctx: CanvasRenderingContext2D): void {
+    const { inner } = this;
     const danger =
       this.state !== 'over' &&
       this.bodies.some((b) => b.vx === 0 && b.vy === 0 && b.y + b.r * 2.4 > this.lineY);
     const pulse = danger ? 0.55 + 0.45 * Math.abs(Math.sin(this.time * 5)) : 0.95;
+    ctx.save();
+    roundRect(ctx, inner.x, inner.y, inner.w, inner.h, 10);
+    ctx.clip();
     ctx.setLineDash([inner.w * 0.03, inner.w * 0.02]);
     ctx.lineWidth = danger ? 4 : 3;
     ctx.strokeStyle =
@@ -1130,14 +1153,9 @@ export class Game {
     ctx.font = `bold ${pillH * 0.52}px ${FONT}`;
     const tw = ctx.measureText(scoreTxt).width;
     const pillW = tw + pillH * 1.6;
-    ctx.save();
-    ctx.shadowColor = 'rgba(60, 30, 5, 0.25)';
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 3;
     roundRect(ctx, pad, topY, pillW, pillH, pillH / 2);
     ctx.fillStyle = 'rgba(80, 45, 15, 0.75)';
     ctx.fill();
-    ctx.restore();
     const coinX = pad + pillH * 0.55;
     const coinY = topY + pillH / 2;
     const coinR = pillH * 0.33;
@@ -1222,15 +1240,10 @@ export class Game {
     const nr = pillH * 0.9;
     const nx = this.W - pad - nr;
     const ny = topY + nr + 2;
-    ctx.save();
-    ctx.shadowColor = 'rgba(60, 30, 5, 0.2)';
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 3;
     ctx.beginPath();
     ctx.arc(nx, ny, nr, 0, Math.PI * 2);
     ctx.fillStyle = 'rgba(255,255,255,0.85)';
     ctx.fill();
-    ctx.restore();
     ctx.lineWidth = 3;
     ctx.strokeStyle = '#e8b04a';
     ctx.stroke();
@@ -1246,14 +1259,9 @@ export class Game {
     const ocX = this.W / 2 - ocW / 2;
     const ocY = topY - 2;
     const flash = this.orderFlash > 0 && Math.sin(this.time * 16) > 0;
-    ctx.save();
-    ctx.shadowColor = 'rgba(60, 30, 5, 0.2)';
-    ctx.shadowBlur = 8;
-    ctx.shadowOffsetY = 3;
     roundRect(ctx, ocX, ocY, ocW, ocH, 12);
     ctx.fillStyle = flash ? '#fff3c4' : 'rgba(255,252,245,0.94)';
     ctx.fill();
-    ctx.restore();
     ctx.lineWidth = 2;
     ctx.strokeStyle = '#e2984a';
     ctx.stroke();
@@ -1298,17 +1306,12 @@ export class Game {
   private drawChain(ctx: CanvasRenderingContext2D): void {
     const barH = Math.max(50, this.H * 0.07);
     const y = this.H - barH - 4;
-    ctx.save();
-    ctx.shadowColor = 'rgba(60, 30, 5, 0.3)';
-    ctx.shadowBlur = 10;
-    ctx.shadowOffsetY = 4;
     roundRect(ctx, 8, y, this.W - 16, barH, barH / 2);
     const barG = ctx.createLinearGradient(0, y, 0, y + barH);
     barG.addColorStop(0, 'rgba(146, 92, 44, 0.92)');
     barG.addColorStop(1, 'rgba(104, 61, 25, 0.92)');
     ctx.fillStyle = barG;
     ctx.fill();
-    ctx.restore();
     roundRect(ctx, 8, y, this.W - 16, barH, barH / 2);
     ctx.strokeStyle = 'rgba(255, 226, 180, 0.25)';
     ctx.lineWidth = 1.5;
@@ -1456,12 +1459,13 @@ export class Game {
       button(ctx, this.btnMint, mColor, mLabel);
       by += bh + rowGap;
 
-      // onchain save status (auto-saves new bests; tappable when action needed)
+      // onchain serve status — every finished round auto-fires serveScore, so
+      // this line narrates the transaction the player is already signing.
       let serveText: string;
       let serveTappable = false;
       let serveColor = '#8a6a3a';
       if (!oc.address) {
-        serveText = '⛓ Tap to connect & save this score onchain';
+        serveText = '⛓ Tap to connect & serve this round onchain';
         serveTappable = true;
         serveColor = '#f2811d';
       } else {
@@ -1469,7 +1473,7 @@ export class Game {
           case 'connecting':
           case 'switching':
           case 'signing':
-            serveText = 'Confirm in wallet to serve this round…';
+            serveText = 'Confirm in your wallet to serve this round…';
             break;
           case 'confirming':
             serveText = 'Serving this round onchain…';
@@ -1479,23 +1483,13 @@ export class Game {
             serveColor = '#2eb872';
             break;
           case 'error':
-            serveText = `Save failed — tap to retry (${oc.error ?? ''})`;
+            serveText = `Serve failed — tap to retry (${oc.error ?? ''})`;
             serveTappable = true;
             serveColor = '#c0392b';
             break;
-          default: {
-            // every backed-up bar can be served onchain — it always counts
-            // toward the global tally, and bests/badges update when earned
-            const beatsScore = this.score > Number(oc.myBest ?? 0n);
+          default:
+            serveText = '🍹 Tap to serve this round onchain';
             serveTappable = this.score > 0;
-            if (beatsScore) {
-              serveText = '⛓ Tap to save this new best onchain';
-            } else if (this.runWorthSaving(true)) {
-              serveText = '⛓ Tap to save your new milestone onchain';
-            } else {
-              serveText = '🍹 Tap to serve this round onchain (+1 to the tally)';
-            }
-          }
         }
       }
       ctx.font = `${serveTappable ? 'bold ' : ''}${pw * 0.042}px ${FONT}`;
@@ -1511,6 +1505,19 @@ export class Game {
       }
       by += pw * 0.1;
 
+      // proof-of-play: link out to the player's onchain rounds on BaseScan
+      if (oc.address) {
+        const rounds = oc.servedByMe > 0 ? ` (${oc.servedByMe} this session)` : '';
+        ctx.font = `${pw * 0.042}px ${FONT}`;
+        ctx.fillStyle = '#2c7be5';
+        ctx.fillText(`🔗 View your onchain rounds${rounds}`, this.W / 2, by + pw * 0.03);
+        const acW = pw * 0.8;
+        this.btnActivity = { x: this.W / 2 - acW / 2, y: by - pw * 0.02, w: acW, h: pw * 0.075 };
+        by += pw * 0.075;
+      } else {
+        this.btnActivity = { x: 0, y: 0, w: 0, h: 0 };
+      }
+
       // leaderboard link
       ctx.font = `bold ${pw * 0.05}px ${FONT}`;
       ctx.fillStyle = '#4f6df5';
@@ -1524,6 +1531,7 @@ export class Game {
       this.btnServe = { x: 0, y: 0, w: 0, h: 0 };
       this.btnMint = { x: 0, y: 0, w: 0, h: 0 };
       this.btnBoard = { x: 0, y: 0, w: 0, h: 0 };
+      this.btnActivity = { x: 0, y: 0, w: 0, h: 0 };
     }
   }
 }
@@ -1532,6 +1540,22 @@ export class Game {
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
+}
+
+/** Render `draw` into an offscreen canvas at device resolution for later blit. */
+function makeLayer(
+  w: number,
+  h: number,
+  draw: (c: CanvasRenderingContext2D) => void,
+): HTMLCanvasElement {
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const c = document.createElement('canvas');
+  c.width = Math.max(1, Math.round(w * dpr));
+  c.height = Math.max(1, Math.round(h * dpr));
+  const cx = c.getContext('2d')!;
+  cx.scale(dpr, dpr);
+  draw(cx);
+  return c;
 }
 
 /**
