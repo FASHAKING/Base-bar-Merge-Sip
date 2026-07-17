@@ -647,6 +647,12 @@ export class Game {
     // automatically (no button hunt). serveScore records any run — it always
     // bumps the global tally and emits ScoreServed, updating bests/badges when
     // earned — so every game the player finishes is a transaction they can see.
+    //
+    // Clear any lingering tx state from the PREVIOUS round first: if the
+    // player restarted while that serve was still confirming, its terminal
+    // 'success' landed mid-round and would otherwise trip serveScore's
+    // double-serve guard, silently blocking this round's transaction.
+    onchain.resetTx();
     const oc = onchain.state;
     if (oc.enabled && oc.address && this.score > 0) {
       onchain.serveScore(this.score, this.maxTierMade);

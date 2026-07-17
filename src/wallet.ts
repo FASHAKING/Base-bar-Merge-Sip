@@ -518,31 +518,49 @@ async function sendWrite(
 
   let txHash: string | null = null;
   setStatus(state, 'signing');
-  if (state.supportsBatching) {
-    const { id } = await sendCalls(config, {
-      calls: [{ to: TALLY_ADDRESS, data: withBuilderCode(data) }],
-    });
-    setStatus(state, 'confirming');
-    // waitForCallsStatus returns { status, receipts } — it does NOT throw on
-    // revert. Check the outcome and any receipt statuses ourselves so a
-    // reverted bundle doesn't silently pass as 'success'.
-    const result = await waitForCallsStatus(config, { id });
-    const bundleStatus = String(result?.status ?? '').toLowerCase();
-    const receipts: Array<{ status?: string | number; transactionHash?: string }> = Array.isArray(
-      result?.receipts,
-    )
-      ? result.receipts
-      : [];
-    const allSucceeded = receipts.every((r) => {
-      const s = String(r?.status ?? '').toLowerCase();
-      return s === 'success' || s === '0x1' || s === '1';
-    });
-    const bundleOk = bundleStatus === 'success' || bundleStatus === 'confirmed';
-    if (!bundleOk || (receipts.length > 0 && !allSucceeded)) {
-      throw new Error('Transaction reverted');
+  let useBatching = state.supportsBatching === true;
+  if (useBatching) {
+    let id: string | null = null;
+    try {
+      ({ id } = await sendCalls(config, {
+        calls: [{ to: TALLY_ADDRESS, data: withBuilderCode(data) }],
+      }));
+    } catch (e) {
+      // Submission failed — nothing reached the chain, so falling back to a
+      // plain tx is safe. A user rejection is final; anything else (wallet
+      // claims batching but wallet_sendCalls flakes/unsupported) shouldn't
+      // strand a player who has gas.
+      const msg = String((e as Error)?.message ?? '').toLowerCase();
+      if (msg.includes('reject') || msg.includes('denied') || msg.includes('cancel')) throw e;
+      console.warn('[merge-sip] sendCalls failed, falling back to plain tx:', e);
+      state.supportsBatching = false;
+      useBatching = false;
+      setStatus(state, 'signing');
     }
-    txHash = receipts[0]?.transactionHash ?? null;
-  } else {
+    if (id !== null) {
+      setStatus(state, 'confirming');
+      // waitForCallsStatus returns { status, receipts } — it does NOT throw on
+      // revert. Check the outcome and any receipt statuses ourselves so a
+      // reverted bundle doesn't silently pass as 'success'.
+      const result = await waitForCallsStatus(config, { id });
+      const bundleStatus = String(result?.status ?? '').toLowerCase();
+      const receipts: Array<{ status?: string | number; transactionHash?: string }> = Array.isArray(
+        result?.receipts,
+      )
+        ? result.receipts
+        : [];
+      const allSucceeded = receipts.every((r) => {
+        const s = String(r?.status ?? '').toLowerCase();
+        return s === 'success' || s === '0x1' || s === '1';
+      });
+      const bundleOk = bundleStatus === 'success' || bundleStatus === 'confirmed';
+      if (!bundleOk || (receipts.length > 0 && !allSucceeded)) {
+        throw new Error('Transaction reverted');
+      }
+      txHash = receipts[0]?.transactionHash ?? null;
+    }
+  }
+  if (!useBatching) {
     const hash = await write();
     txHash = hash;
     setStatus(state, 'confirming');
