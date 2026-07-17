@@ -685,6 +685,12 @@ export async function claimUsername(state: OnchainState, name: string): Promise<
 
 function shortError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
+  // viem buries revert reasons and balance errors below the first line —
+  // translate the common ones into something a player can act on
+  if (/serve a score first/i.test(msg)) return 'Serve a score onchain first, then mint';
+  if (/insufficient funds|exceeds the balance|gas required exceeds/i.test(msg)) {
+    return 'Not enough ETH on Base for gas — bridge a little ETH to Base';
+  }
   const firstLine = msg.split('\n')[0];
   if (/rejected|denied/i.test(firstLine)) return 'Request rejected';
   return firstLine.length > 60 ? firstLine.slice(0, 57) + '…' : firstLine;
