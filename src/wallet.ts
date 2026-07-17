@@ -251,8 +251,20 @@ function readHistoryCache(): HistoryCache | null {
   }
 }
 
-/** All ScoreServed events since deploy (cached; only the delta is fetched). */
-async function scanHistory(): Promise<{ events: ServedEvent[]; latest: bigint } | null> {
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * All ScoreServed events since deploy. The public RPC rate-limits bursts of
+ * getLogs, and the block range grows daily — so chunks are paced, each chunk
+ * retries with backoff, progress persists to localStorage after EVERY chunk
+ * (a rate-limited session still advances the cache for the next one), and a
+ * partial scan returns what it has (complete=false) instead of failing.
+ */
+async function scanHistory(): Promise<{
+  events: ServedEvent[];
+  latest: bigint;
+  complete: boolean;
+} | null> {
   const client = getPublicClient(config, { chainId: TALLY_CHAIN.id });
   if (!client) return null;
   const latest = await client.getBlockNumber();
@@ -262,34 +274,49 @@ async function scanHistory(): Promise<{ events: ServedEvent[]; latest: bigint } 
   const cache = readHistoryCache();
   const events: ServedEvent[] = cache ? [...cache.events] : [];
   let from = cache ? BigInt(cache.to) + 1n : deployStart;
+  let complete = true;
 
   while (from <= latest) {
     const to = from + LOG_CHUNK - 1n > latest ? latest : from + LOG_CHUNK - 1n;
-    const logs = await client.getLogs({
-      address: TALLY_ADDRESS,
-      event: scoreServedEvent,
-      fromBlock: from,
-      toBlock: to,
-    });
-    for (const log of logs) {
-      if (log.args.player && log.args.score !== undefined) {
-        events.push([
-          log.args.player,
-          log.args.score.toString(),
-          Number(log.args.tier ?? 0),
-          (log.blockNumber ?? to).toString(),
-        ]);
+    let ok = false;
+    for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+      try {
+        if (attempt > 0) await sleep(500 * attempt);
+        const logs = await client.getLogs({
+          address: TALLY_ADDRESS,
+          event: scoreServedEvent,
+          fromBlock: from,
+          toBlock: to,
+        });
+        for (const log of logs) {
+          if (log.args.player && log.args.score !== undefined) {
+            events.push([
+              log.args.player,
+              log.args.score.toString(),
+              Number(log.args.tier ?? 0),
+              (log.blockNumber ?? to).toString(),
+            ]);
+          }
+        }
+        ok = true;
+      } catch {
+        /* rate limited / transient — retry with backoff */
       }
     }
+    if (!ok) {
+      complete = false;
+      break;
+    }
+    try {
+      localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify({ to: to.toString(), events }));
+    } catch {
+      /* cache is an optimization only */
+    }
     from = to + 1n;
+    if (from <= latest) await sleep(250); // stay under public-RPC burst limits
   }
 
-  try {
-    localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify({ to: latest.toString(), events }));
-  } catch {
-    /* cache is an optimization only */
-  }
-  return { events, latest };
+  return { events, latest, complete };
 }
 
 /** Best run per player, sorted descending. */
@@ -360,11 +387,30 @@ export async function refreshBoards(state: OnchainState): Promise<void> {
   try {
     const scan = await scanHistory();
     if (!scan) return;
-    const { events, latest } = scan;
+    const { events, latest, complete } = scan;
+    state.boardsSynced = complete;
 
     const start = TALLY_DEPLOY_BLOCK > latest ? 0n : TALLY_DEPLOY_BLOCK;
     const windowStart = latest > start + WEEK_OF_BLOCKS ? latest - WEEK_OF_BLOCKS : start;
-    const fullRanked = rank(events);
+
+    // best score per player from events, then two rows the scan can never
+    // miss: the contract's own top 10, and the connected player's onchain
+    // best — so "(you)" always appears even when the scan is incomplete.
+    const best = new Map<string, { score: bigint; tier: number }>();
+    for (const [player, v] of rank(events)) best.set(player, v);
+    for (const e of state.leaderboard ?? []) {
+      const key = e.player.toLowerCase();
+      const cur = best.get(key);
+      if (!cur || e.score > cur.score) best.set(key, { score: e.score, tier: e.tier });
+    }
+    if (state.address && state.myBest !== null && state.myBest > 0n) {
+      const key = state.address.toLowerCase();
+      const cur = best.get(key);
+      if (!cur || state.myBest > cur.score) best.set(key, { score: state.myBest, tier: 0 });
+    }
+    const fullRanked = [...best.entries()].sort((a, b) =>
+      b[1].score > a[1].score ? 1 : b[1].score < a[1].score ? -1 : 0,
+    );
     const weeklyRanked = rank(events.filter((e) => BigInt(e[3]) >= windowStart)).slice(0, 10);
 
     const players = [...new Set([...fullRanked, ...weeklyRanked].map(([p]) => p))];
@@ -540,6 +586,7 @@ export async function serveScore(
     void refreshMyBest(state);
     void refreshBadges(state);
     void refreshLeaderboard(state);
+    void refreshBoards(state); // pick up the new round so "(you)" ranks immediately
   } catch (e) {
     state.status = 'error';
     state.error = shortError(e);

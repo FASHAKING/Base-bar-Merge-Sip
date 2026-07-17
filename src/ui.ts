@@ -352,6 +352,9 @@ function renderBoard(): void {
     }
   }
 
+  // a rate-limited scan resumes from its cache — keep nudging it while open
+  if (!s.boardsSynced && !s.weeklyLoading) onchain.refreshBoards();
+
   board.forEach((e, i) => {
     const li = document.createElement('li');
     const isMe = me !== undefined && e.player.toLowerCase() === me;
@@ -370,4 +373,11 @@ function renderBoard(): void {
     li.append(rank, who, pts);
     list.appendChild(li);
   });
+
+  if (boardView === 'all' && !s.boardsSynced) {
+    const li = document.createElement('li');
+    li.className = 'empty';
+    li.textContent = '🍹 Still pouring older rounds…';
+    list.appendChild(li);
+  }
 }
