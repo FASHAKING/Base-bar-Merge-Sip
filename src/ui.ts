@@ -326,6 +326,12 @@ function renderBoard(): void {
     list.innerHTML = '<li class="empty">Leaderboard goes live once the contract is deployed</li>';
     return;
   }
+
+  // a rate-limited scan resumes from its cache — keep nudging it while the
+  // board is open. This must run before the null/empty early-returns below,
+  // or an interrupted scan that published nothing would never recover.
+  if (!s.boardsSynced && !s.weeklyLoading) onchain.refreshBoards();
+
   // All-time prefers the full event-built board (every player, scrollable);
   // the contract's onchain top 10 is the fallback while events load.
   const board = boardView === 'week' ? s.weekly : (s.fullBoard ?? s.leaderboard);
@@ -335,25 +341,28 @@ function renderBoard(): void {
     return;
   }
   if (board.length === 0) {
-    list.innerHTML =
-      boardView === 'week'
+    // an unfinished scan can't prove the board is empty — say so instead
+    list.innerHTML = !s.boardsSynced
+      ? '<li class="empty">🍹 Still pouring the standings…</li>'
+      : boardView === 'week'
         ? '<li class="empty">No scores served this week — set the pace! 🍹</li>'
         : '<li class="empty">No scores served yet — be the first! 🍹</li>';
     return;
   }
 
   const me = s.address?.toLowerCase();
-  // your position, shown above the list
+  // your position, shown above the list. While the event scan is incomplete
+  // the index is only a lower bound (unscanned players may rank above), so
+  // present it as provisional rather than exact.
   if (me && boardView === 'all' && s.fullBoard) {
     const idx = s.fullBoard.findIndex((e) => e.player.toLowerCase() === me);
     if (idx >= 0) {
       rankLine.hidden = false;
-      rankLine.textContent = `Your position: #${idx + 1} of ${s.fullBoard.length} mixologists`;
+      rankLine.textContent = s.boardsSynced
+        ? `Your position: #${idx + 1} of ${s.fullBoard.length} mixologists`
+        : `Your position: ~#${idx + 1} of ${s.fullBoard.length}+ mixologists (syncing…)`;
     }
   }
-
-  // a rate-limited scan resumes from its cache — keep nudging it while open
-  if (!s.boardsSynced && !s.weeklyLoading) onchain.refreshBoards();
 
   board.forEach((e, i) => {
     const li = document.createElement('li');
