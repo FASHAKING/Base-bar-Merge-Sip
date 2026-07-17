@@ -38,6 +38,7 @@ export interface OnchainState {
   boardLoading: boolean;
   weekly: LeaderboardEntry[] | null; // this week's top scores (from events)
   fullBoard: LeaderboardEntry[] | null; // every player, ranked (from events)
+  boardsSynced: boolean; // false while older rounds are still being scanned
   weeklyLoading: boolean;
   badges: bigint | null; // milestone bitmask (bit N = tier-N first mixed)
   mintStatus: TxStatus; // mintScoreCard transaction state
@@ -63,6 +64,7 @@ export const state: OnchainState = {
   boardLoading: false,
   weekly: null,
   fullBoard: null,
+  boardsSynced: false,
   weeklyLoading: false,
   badges: null,
   mintStatus: 'idle',

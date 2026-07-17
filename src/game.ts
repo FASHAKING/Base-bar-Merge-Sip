@@ -141,6 +141,9 @@ export class Game {
   private btnShareX: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private btnMint: Rect = { x: 0, y: 0, w: 0, h: 0 };
   private btnActivity: Rect = { x: 0, y: 0, w: 0, h: 0 };
+  // mint is only offered once an onchain score exists (the contract reverts
+  // otherwise), computed each frame the game-over panel draws
+  private canMint = false;
 
   /** Personal best (this device), shown as the milestone to beat. */
   get bestScore(): number {
@@ -332,7 +335,7 @@ export class Game {
           this.mode === 'daily' ? dailyNumber() : null,
         );
       } else if (onchain.state.enabled && hit(this.btnMint, p)) {
-        onchain.mintScoreCard();
+        if (this.canMint) onchain.mintScoreCard();
       } else if (onchain.state.enabled && hit(this.btnServe, p)) {
         onchain.serveScore(this.score, this.maxTierMade);
       } else if (onchain.state.enabled && hit(this.btnActivity, p) && onchain.state.address) {
@@ -647,6 +650,12 @@ export class Game {
     // automatically (no button hunt). serveScore records any run — it always
     // bumps the global tally and emits ScoreServed, updating bests/badges when
     // earned — so every game the player finishes is a transaction they can see.
+    //
+    // Clear any lingering tx state from the PREVIOUS round first: if the
+    // player restarted while that serve was still confirming, its terminal
+    // 'success' landed mid-round and would otherwise trip serveScore's
+    // double-serve guard, silently blocking this round's transaction.
+    onchain.resetTx();
     const oc = onchain.state;
     if (oc.enabled && oc.address && this.score > 0) {
       onchain.serveScore(this.score, this.maxTierMade);
@@ -1446,6 +1455,12 @@ export class Game {
       this.btnShareX = { x: this.W / 2 - bw - 6, y: by, w: bw, h: bh };
       this.btnMint = { x: this.W / 2 + 6, y: by, w: bw, h: bh };
       button(ctx, this.btnShareX, '#1d2229', 'Share on 𝕏');
+      // The contract reverts mintScoreCard with "serve a score first" while
+      // the player's onchain bestScore is 0 — a doomed transaction that
+      // wallets refuse no matter how much gas the player has. Only offer the
+      // mint once a score is actually recorded onchain.
+      this.canMint =
+        Number(oc.myBest ?? 0n) > 0 || oc.status === 'success' || oc.mintStatus === 'success';
       const mintLabels: Record<string, [string, string]> = {
         idle: ['Mint Card 🎴', '#f2811d'],
         connecting: ['Confirm…', '#8a6a3a'],
@@ -1455,7 +1470,9 @@ export class Game {
         success: ['Minted ✓', '#2eb872'],
         error: ['Retry Mint', '#c0392b'],
       };
-      const [mLabel, mColor] = mintLabels[oc.mintStatus];
+      const [mLabel, mColor] = this.canMint
+        ? mintLabels[oc.mintStatus]
+        : ['Serve first 🎴', '#b3a48c'];
       button(ctx, this.btnMint, mColor, mLabel);
       by += bh + rowGap;
 

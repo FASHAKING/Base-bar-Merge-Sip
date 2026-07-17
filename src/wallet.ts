@@ -251,8 +251,20 @@ function readHistoryCache(): HistoryCache | null {
   }
 }
 
-/** All ScoreServed events since deploy (cached; only the delta is fetched). */
-async function scanHistory(): Promise<{ events: ServedEvent[]; latest: bigint } | null> {
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * All ScoreServed events since deploy. The public RPC rate-limits bursts of
+ * getLogs, and the block range grows daily — so chunks are paced, each chunk
+ * retries with backoff, progress persists to localStorage after EVERY chunk
+ * (a rate-limited session still advances the cache for the next one), and a
+ * partial scan returns what it has (complete=false) instead of failing.
+ */
+async function scanHistory(): Promise<{
+  events: ServedEvent[];
+  latest: bigint;
+  complete: boolean;
+} | null> {
   const client = getPublicClient(config, { chainId: TALLY_CHAIN.id });
   if (!client) return null;
   const latest = await client.getBlockNumber();
@@ -262,34 +274,49 @@ async function scanHistory(): Promise<{ events: ServedEvent[]; latest: bigint } 
   const cache = readHistoryCache();
   const events: ServedEvent[] = cache ? [...cache.events] : [];
   let from = cache ? BigInt(cache.to) + 1n : deployStart;
+  let complete = true;
 
   while (from <= latest) {
     const to = from + LOG_CHUNK - 1n > latest ? latest : from + LOG_CHUNK - 1n;
-    const logs = await client.getLogs({
-      address: TALLY_ADDRESS,
-      event: scoreServedEvent,
-      fromBlock: from,
-      toBlock: to,
-    });
-    for (const log of logs) {
-      if (log.args.player && log.args.score !== undefined) {
-        events.push([
-          log.args.player,
-          log.args.score.toString(),
-          Number(log.args.tier ?? 0),
-          (log.blockNumber ?? to).toString(),
-        ]);
+    let ok = false;
+    for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+      try {
+        if (attempt > 0) await sleep(500 * attempt);
+        const logs = await client.getLogs({
+          address: TALLY_ADDRESS,
+          event: scoreServedEvent,
+          fromBlock: from,
+          toBlock: to,
+        });
+        for (const log of logs) {
+          if (log.args.player && log.args.score !== undefined) {
+            events.push([
+              log.args.player,
+              log.args.score.toString(),
+              Number(log.args.tier ?? 0),
+              (log.blockNumber ?? to).toString(),
+            ]);
+          }
+        }
+        ok = true;
+      } catch {
+        /* rate limited / transient — retry with backoff */
       }
     }
+    if (!ok) {
+      complete = false;
+      break;
+    }
+    try {
+      localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify({ to: to.toString(), events }));
+    } catch {
+      /* cache is an optimization only */
+    }
     from = to + 1n;
+    if (from <= latest) await sleep(250); // stay under public-RPC burst limits
   }
 
-  try {
-    localStorage.setItem(HISTORY_CACHE_KEY, JSON.stringify({ to: latest.toString(), events }));
-  } catch {
-    /* cache is an optimization only */
-  }
-  return { events, latest };
+  return { events, latest, complete };
 }
 
 /** Best run per player, sorted descending. */
@@ -360,11 +387,30 @@ export async function refreshBoards(state: OnchainState): Promise<void> {
   try {
     const scan = await scanHistory();
     if (!scan) return;
-    const { events, latest } = scan;
+    const { events, latest, complete } = scan;
+    state.boardsSynced = complete;
 
     const start = TALLY_DEPLOY_BLOCK > latest ? 0n : TALLY_DEPLOY_BLOCK;
     const windowStart = latest > start + WEEK_OF_BLOCKS ? latest - WEEK_OF_BLOCKS : start;
-    const fullRanked = rank(events);
+
+    // best score per player from events, then two rows the scan can never
+    // miss: the contract's own top 10, and the connected player's onchain
+    // best — so "(you)" always appears even when the scan is incomplete.
+    const best = new Map<string, { score: bigint; tier: number }>();
+    for (const [player, v] of rank(events)) best.set(player, v);
+    for (const e of state.leaderboard ?? []) {
+      const key = e.player.toLowerCase();
+      const cur = best.get(key);
+      if (!cur || e.score > cur.score) best.set(key, { score: e.score, tier: e.tier });
+    }
+    if (state.address && state.myBest !== null && state.myBest > 0n) {
+      const key = state.address.toLowerCase();
+      const cur = best.get(key);
+      if (!cur || state.myBest > cur.score) best.set(key, { score: state.myBest, tier: 0 });
+    }
+    const fullRanked = [...best.entries()].sort((a, b) =>
+      b[1].score > a[1].score ? 1 : b[1].score < a[1].score ? -1 : 0,
+    );
     const weeklyRanked = rank(events.filter((e) => BigInt(e[3]) >= windowStart)).slice(0, 10);
 
     const players = [...new Set([...fullRanked, ...weeklyRanked].map(([p]) => p))];
@@ -472,31 +518,49 @@ async function sendWrite(
 
   let txHash: string | null = null;
   setStatus(state, 'signing');
-  if (state.supportsBatching) {
-    const { id } = await sendCalls(config, {
-      calls: [{ to: TALLY_ADDRESS, data: withBuilderCode(data) }],
-    });
-    setStatus(state, 'confirming');
-    // waitForCallsStatus returns { status, receipts } — it does NOT throw on
-    // revert. Check the outcome and any receipt statuses ourselves so a
-    // reverted bundle doesn't silently pass as 'success'.
-    const result = await waitForCallsStatus(config, { id });
-    const bundleStatus = String(result?.status ?? '').toLowerCase();
-    const receipts: Array<{ status?: string | number; transactionHash?: string }> = Array.isArray(
-      result?.receipts,
-    )
-      ? result.receipts
-      : [];
-    const allSucceeded = receipts.every((r) => {
-      const s = String(r?.status ?? '').toLowerCase();
-      return s === 'success' || s === '0x1' || s === '1';
-    });
-    const bundleOk = bundleStatus === 'success' || bundleStatus === 'confirmed';
-    if (!bundleOk || (receipts.length > 0 && !allSucceeded)) {
-      throw new Error('Transaction reverted');
+  let useBatching = state.supportsBatching === true;
+  if (useBatching) {
+    let id: string | null = null;
+    try {
+      ({ id } = await sendCalls(config, {
+        calls: [{ to: TALLY_ADDRESS, data: withBuilderCode(data) }],
+      }));
+    } catch (e) {
+      // Submission failed — nothing reached the chain, so falling back to a
+      // plain tx is safe. A user rejection is final; anything else (wallet
+      // claims batching but wallet_sendCalls flakes/unsupported) shouldn't
+      // strand a player who has gas.
+      const msg = String((e as Error)?.message ?? '').toLowerCase();
+      if (msg.includes('reject') || msg.includes('denied') || msg.includes('cancel')) throw e;
+      console.warn('[merge-sip] sendCalls failed, falling back to plain tx:', e);
+      state.supportsBatching = false;
+      useBatching = false;
+      setStatus(state, 'signing');
     }
-    txHash = receipts[0]?.transactionHash ?? null;
-  } else {
+    if (id !== null) {
+      setStatus(state, 'confirming');
+      // waitForCallsStatus returns { status, receipts } — it does NOT throw on
+      // revert. Check the outcome and any receipt statuses ourselves so a
+      // reverted bundle doesn't silently pass as 'success'.
+      const result = await waitForCallsStatus(config, { id });
+      const bundleStatus = String(result?.status ?? '').toLowerCase();
+      const receipts: Array<{ status?: string | number; transactionHash?: string }> = Array.isArray(
+        result?.receipts,
+      )
+        ? result.receipts
+        : [];
+      const allSucceeded = receipts.every((r) => {
+        const s = String(r?.status ?? '').toLowerCase();
+        return s === 'success' || s === '0x1' || s === '1';
+      });
+      const bundleOk = bundleStatus === 'success' || bundleStatus === 'confirmed';
+      if (!bundleOk || (receipts.length > 0 && !allSucceeded)) {
+        throw new Error('Transaction reverted');
+      }
+      txHash = receipts[0]?.transactionHash ?? null;
+    }
+  }
+  if (!useBatching) {
     const hash = await write();
     txHash = hash;
     setStatus(state, 'confirming');
@@ -540,6 +604,7 @@ export async function serveScore(
     void refreshMyBest(state);
     void refreshBadges(state);
     void refreshLeaderboard(state);
+    void refreshBoards(state); // pick up the new round so "(you)" ranks immediately
   } catch (e) {
     state.status = 'error';
     state.error = shortError(e);
@@ -620,6 +685,12 @@ export async function claimUsername(state: OnchainState, name: string): Promise<
 
 function shortError(e: unknown): string {
   const msg = e instanceof Error ? e.message : String(e);
+  // viem buries revert reasons and balance errors below the first line —
+  // translate the common ones into something a player can act on
+  if (/serve a score first/i.test(msg)) return 'Serve a score onchain first, then mint';
+  if (/insufficient funds|exceeds the balance|gas required exceeds/i.test(msg)) {
+    return 'Not enough ETH on Base for gas — bridge a little ETH to Base';
+  }
   const firstLine = msg.split('\n')[0];
   if (/rejected|denied/i.test(firstLine)) return 'Request rejected';
   return firstLine.length > 60 ? firstLine.slice(0, 57) + '…' : firstLine;

@@ -234,6 +234,39 @@
         color: #1fa25c;
         cursor: pointer;
       }
+      #howto {
+        text-align: left;
+        background: #fff6e3;
+        border: 1.5px solid #ecd3a7;
+        border-radius: 16px;
+        padding: 10px 14px;
+      }
+      #howto summary {
+        cursor: pointer;
+        font-weight: 600;
+        color: #7d5a2e;
+        list-style: none;
+        text-align: center;
+      }
+      #howto summary::-webkit-details-marker {
+        display: none;
+      }
+      #howto[open] summary {
+        margin-bottom: 8px;
+      }
+      #howto ol {
+        margin: 0;
+        padding-left: 20px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+        font-size: 0.88rem;
+        line-height: 1.4;
+        color: #6b4a22;
+      }
+      #howto b {
+        color: #4a2f14;
+      }
       #challenge-line {
         color: #e8801a;
       }
@@ -369,6 +402,16 @@
         <p class="tagline">Slide matching drinks together and mix your way up to the Legendary Tiki!</p>
         <p id="intro-best" class="best-line"></p>
         <p id="challenge-line" class="best-line" hidden></p>
+        <details id="howto">
+          <summary>❓ &nbsp;How to play</summary>
+          <ol>
+            <li><b>Aim &amp; pour:</b> touch and drag left or right to aim, then let go — your drink slides up the sandy board.</li>
+            <li><b>Merge:</b> when two identical drinks touch, they mix into a fancier drink and score points. Keep merging toward the Legendary Tiki!</li>
+            <li><b>Combos &amp; orders:</b> quick back-to-back merges multiply points (up to ×5). Deliver the drink on the TO-GO ORDER card for a bonus.</li>
+            <li><b>Don't overfill:</b> if any drink stops below the dashed line, the bar is backed up — game over.</li>
+            <li><b>Onchain:</b> when a round ends, your wallet pops up to serve the score onchain — confirm it and you're on the leaderboard.</li>
+          </ol>
+        </details>
         <button id="connect-btn" class="btn blue" hidden>Connect Wallet</button>
         <div id="register-row" hidden>
           <input id="username-input" maxlength="16" placeholder="pick_a_username" autocomplete="off" spellcheck="false" />
